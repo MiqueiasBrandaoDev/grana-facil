@@ -1,0 +1,41 @@
+# 🐳 DOCKER COMPOSE PARA DESENVOLVIMENTO E TESTE LOCAL
+# Use apenas para testes locais - EasyPanel usa o Dockerfile diretamente
+
+version: '3.8'
+
+services:
+  granafacil:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:80"
+    environment:
+      # Variáveis de ambiente (configure conforme necessário)
+      - NODE_ENV=production
+    volumes:
+      # Volume para logs (opcional)
+      - ./logs:/var/log/nginx
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+# Para desenvolvimento local com hot reload (alternativo)
+  granafacil-dev:
+    build:
+      context: .
+      target: builder
+    ports:
+      - "5173:5173"
+    volumes:
+      - .:/app
+      - /app/node_modules
+    command: npm run dev
+    environment:
+      - NODE_ENV=development
+    profiles:
+      - dev

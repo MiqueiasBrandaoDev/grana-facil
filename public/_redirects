@@ -1,0 +1,6 @@
+# Netlify/Vercel redirects
+/*    /index.html   200
+
+# API routes for webhook (para serviços que suportam)
+/api/evolution/webhook  /.netlify/functions/evolution-webhook  200
+/api/evolution/status   /.netlify/functions/evolution-status   200
