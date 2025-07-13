@@ -108,28 +108,45 @@ export class EvolutionWebhookService {
 
       console.log(`📨 Mensagem de ${senderName} (${phoneNumber}): ${messageText}`);
 
-      // Buscar ou criar usuário baseado no número do WhatsApp
-      const user = await this.findOrCreateUser(phoneNumber, senderName);
+      // Primeiro, buscar usuário existente
+      let user = await this.findUserByPhone(phoneNumber);
+      let isNewUser = false;
+
       if (!user) {
-        await this.sendMessage(
-          phoneNumber,
-          "❌ Erro interno. Não foi possível identificar seu usuário. Entre em contato com o suporte."
-        );
-        return;
+        // Usuário não encontrado - enviar apresentação do sistema
+        console.log(`🆕 Novo usuário detectado: ${phoneNumber}`);
+        
+        await this.sendSystemPresentation(phoneNumber, senderName);
+        
+        // Criar usuário temporário para demo
+        user = await this.createTemporaryUser(phoneNumber, senderName);
+        isNewUser = true;
+        
+        if (!user) {
+          await this.sendMessage(
+            phoneNumber,
+            "❌ Erro interno. Não foi possível processar sua solicitação. Entre em contato com o suporte."
+          );
+          return;
+        }
       }
 
       // Salvar mensagem recebida no banco
       await this.saveMessage(user.id, messageText, 'user');
 
-      // Processar com o agente IA
-      console.log('🤖 Processando com IA Agent...');
-      const response = await aiAgent.processCommand(messageText);
-
-      // Enviar resposta
-      await this.sendMessage(phoneNumber, response.message);
-
-      // Salvar resposta no banco
-      await this.saveMessage(user.id, response.message, 'bot');
+      // Se for usuário novo, processar comandos de demonstração
+      if (isNewUser) {
+        console.log('🎯 Processando comando de demonstração...');
+        const demoResponse = await this.processDemoCommand(messageText, user);
+        await this.sendMessage(phoneNumber, demoResponse);
+        await this.saveMessage(user.id, demoResponse, 'bot');
+      } else {
+        // Usuário existente - processar normalmente com IA Agent
+        console.log('🤖 Processando com IA Agent...');
+        const response = await aiAgent.processCommand(messageText);
+        await this.sendMessage(phoneNumber, response.message);
+        await this.saveMessage(user.id, response.message, 'bot');
+      }
 
       console.log(`✅ Mensagem processada para ${phoneNumber}`);
 
@@ -146,11 +163,12 @@ export class EvolutionWebhookService {
   }
 
   /**
-   * 👤 Buscar ou criar usuário pelo número do WhatsApp
+   * 👤 Buscar usuário pelo número do WhatsApp
+   * Se não encontrar, retorna null (não cria automaticamente)
    */
-  private async findOrCreateUser(phoneNumber: string, displayName?: string): Promise<any> {
+  private async findUserByPhone(phoneNumber: string): Promise<any> {
     try {
-      // Primeiro, tentar encontrar usuário existente
+      // Buscar usuário existente que já tem o telefone configurado
       const { data: existingUser } = await supabase
         .from('users')
         .select('*')
@@ -158,17 +176,32 @@ export class EvolutionWebhookService {
         .single();
 
       if (existingUser) {
-        console.log(`👤 Usuário existente: ${phoneNumber}`);
+        console.log(`👤 Usuário existente encontrado: ${phoneNumber}`);
         return existingUser;
       }
 
-      // Se não existe, criar novo usuário
-      const { data: newUser, error } = await supabase
+      console.log(`❌ Nenhum usuário encontrado para o telefone: ${phoneNumber}`);
+      return null;
+
+    } catch (error) {
+      console.error('❌ Erro ao buscar usuário:', error);
+      return null;
+    }
+  }
+
+  /**
+   * 🎯 Criar usuário temporário para lead/demo
+   * Para usuários que ainda não se cadastraram no sistema
+   */
+  private async createTemporaryUser(phoneNumber: string, displayName?: string): Promise<any> {
+    try {
+      // Criar usuário temporário apenas para demonstração
+      const { data: tempUser, error } = await supabase
         .from('users')
         .insert({
           phone: phoneNumber,
-          full_name: displayName || `Usuário WhatsApp ${phoneNumber.slice(-4)}`,
-          email: `${phoneNumber}@whatsapp.user`, // Email fictício para satisfazer constraints
+          full_name: displayName || `Lead WhatsApp ${phoneNumber.slice(-4)}`,
+          email: `${phoneNumber}@whatsapp.temp`, // Email temporário
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         })
@@ -176,23 +209,23 @@ export class EvolutionWebhookService {
         .single();
 
       if (error) {
-        console.error('❌ Erro ao criar usuário:', error);
+        console.error('❌ Erro ao criar usuário temporário:', error);
         return null;
       }
 
-      // Criar categorias padrão para o novo usuário
+      // Criar categorias básicas para demonstração
       try {
-        await supabase.rpc('create_default_categories', { user_id: newUser.id });
-        console.log('🏷️ Categorias padrão criadas');
+        await supabase.rpc('create_default_categories', { user_id: tempUser.id });
+        console.log('🏷️ Categorias demo criadas');
       } catch (catError) {
-        console.warn('⚠️ Erro ao criar categorias padrão:', catError);
+        console.warn('⚠️ Erro ao criar categorias demo:', catError);
       }
 
-      console.log(`✅ Novo usuário criado: ${phoneNumber}`);
-      return newUser;
+      console.log(`✅ Usuário temporário criado para demo: ${phoneNumber}`);
+      return tempUser;
 
     } catch (error) {
-      console.error('❌ Erro ao buscar/criar usuário:', error);
+      console.error('❌ Erro ao criar usuário temporário:', error);
       return null;
     }
   }
@@ -256,12 +289,186 @@ export class EvolutionWebhookService {
   }
 
   /**
-   * 📊 Enviar mensagem de boas-vindas
+   * 🎯 Apresentação do sistema para novos usuários
+   */
+  async sendSystemPresentation(to: string, userName?: string): Promise<boolean> {
+    const presentationText = `🎉 *Olá${userName ? ` ${userName}` : ''}! Bem-vindo à Grana Fácil!*
+
+🤖 Sou a *Grana IA*, seu assistente financeiro inteligente powered by GPT-4o.
+
+💡 *O que eu posso fazer por você:*
+💰 Organizar suas finanças automaticamente
+📊 Controlar receitas e despesas  
+🎯 Ajudar com metas financeiras
+💳 Gerenciar contas e investimentos
+📈 Gerar relatórios detalhados
+🏷️ Categorizar gastos inteligentemente
+
+🚀 *Experimente agora mesmo:*
+• "Gastei 50 reais no supermercado"
+• "Recebi 2000 reais de salário"
+• "Quero economizar 5000 reais"
+• "Qual meu saldo atual?"
+
+📱 *Esta é uma demonstração gratuita!*
+Para ter acesso completo, cadastre-se em nossa plataforma web.
+
+Digite qualquer comando financeiro para começar! 💪`;
+
+    return await this.sendMessage(to, presentationText);
+  }
+
+  /**
+   * 🎯 Processar comandos de demonstração para novos usuários
+   */
+  async processDemoCommand(command: string, user: any): Promise<string> {
+    try {
+      // Verificar se é comando financeiro básico
+      const lowerCommand = command.toLowerCase();
+      
+      if (lowerCommand.includes('gastei') || lowerCommand.includes('paguei') || lowerCommand.includes('comprei')) {
+        return `💸 *Transação de demonstração registrada!*
+
+✅ Despesa processada com sucesso
+📝 Categoria sugerida automaticamente
+📊 Saldo atualizado
+
+💡 *Na versão completa você teria:*
+• Análise detalhada de gastos
+• Categorização automática avançada
+• Alertas de orçamento
+• Relatórios mensais
+• Sincronização bancária
+
+🚀 *Quer experimentar mais recursos?*
+Cadastre-se gratuitamente em nossa plataforma!
+
+Continue testando: "Recebi 1000 reais" ou "Qual meu saldo?"`;
+      }
+      
+      if (lowerCommand.includes('recebi') || lowerCommand.includes('ganhei') || lowerCommand.includes('salário')) {
+        return `💰 *Receita de demonstração registrada!*
+
+✅ Entrada processada com sucesso
+📈 Saldo aumentado
+🎯 Oportunidade de meta detectada
+
+💡 *Na versão completa você teria:*
+• Projeções de renda
+• Sugestões de investimento
+• Planejamento automático
+• Metas personalizadas
+• Dashboard completo
+
+🚀 *Quer ver tudo funcionando?*
+Cadastre-se e conecte suas contas!
+
+Continue testando: "Quero economizar 2000 reais"`;
+      }
+      
+      if (lowerCommand.includes('saldo') || lowerCommand.includes('quanto tenho')) {
+        return `📊 *Saldo da demonstração:*
+
+💰 Saldo atual: R$ 1.247,50
+📈 Entradas do mês: R$ 2.000,00
+📉 Saídas do mês: R$ 752,50
+💹 Resultado: +R$ 1.247,50
+
+💡 *Na versão completa você veria:*
+• Saldo real de todas as contas
+• Histórico detalhado
+• Gráficos interativos
+• Comparações mensais
+• Previsões futuras
+
+🚀 *Cadastre-se para ver seus dados reais!*`;
+      }
+      
+      if (lowerCommand.includes('economizar') || lowerCommand.includes('meta') || lowerCommand.includes('guardar')) {
+        return `🎯 *Meta de demonstração criada!*
+
+✅ Objetivo registrado
+📅 Prazo sugerido: 12 meses
+💪 Valor mensal necessário calculado
+
+💡 *Na versão completa você teria:*
+• Múltiplas metas simultâneas
+• Acompanhamento automático
+• Lembretes personalizados
+• Estratégias de economia
+• Simulações de investimento
+
+🚀 *Quer planejar suas metas reais?*
+Cadastre-se e use todos os recursos!
+
+Continue testando: "Me dê dicas financeiras"`;
+      }
+      
+      if (lowerCommand.includes('dica') || lowerCommand.includes('conselho') || lowerCommand.includes('ajuda')) {
+        return `💡 *Dicas financeiras da Grana IA:*
+
+🎯 *Para você especificamente:*
+• Controle gastos com categorização
+• Estabeleça metas realistas  
+• Automatize investimentos
+• Monitore fluxo de caixa
+
+💰 *Dicas gerais:*
+• Regra 50/30/20 (necessidades/desejos/poupança)
+• Emergency fund = 6 meses de gastos
+• Invista regularmente, mesmo valores pequenos
+
+🚀 *Na versão completa:*
+• Análises personalizadas baseadas no seu perfil
+• Sugestões específicas para sua situação
+• Alertas inteligentes
+• Consultoria financeira automatizada
+
+*Cadastre-se para conselhos personalizados!*`;
+      }
+      
+      // Comando não reconhecido
+      return `🤖 *Comando não reconhecido na demonstração*
+
+🚀 *Comandos que você pode testar:*
+• "Gastei 30 reais no almoço"
+• "Recebi 1500 reais"
+• "Qual meu saldo?"
+• "Quero economizar 3000 reais"
+• "Me dê dicas financeiras"
+
+💡 *Na versão completa da Grana IA:*
+• Processamento de linguagem natural avançado
+• Integração com bancos e cartões
+• Análises preditivas
+• Relatórios personalizados
+
+*Cadastre-se para ter acesso completo!*`;
+      
+    } catch (error) {
+      console.error('❌ Erro ao processar comando demo:', error);
+      return `❌ Erro na demonstração. 
+
+🚀 *Cadastre-se na versão completa* para ter:
+• Processamento avançado
+• Integração real com bancos
+• Suporte técnico dedicado
+• Backup automático dos dados
+
+*Visite nossa plataforma para começar!*`;
+    }
+  }
+
+  /**
+   * 📊 Enviar mensagem de boas-vindas (usuários cadastrados)
    */
   async sendWelcomeMessage(to: string, userName?: string): Promise<boolean> {
-    const welcomeText = `🎉 *Bem-vindo${userName ? ` ${userName}` : ''} à Grana IA!*
+    const welcomeText = `🎉 *Bem-vindo de volta${userName ? ` ${userName}` : ''}!*
 
-🤖 Sou seu assistente financeiro inteligente, powered by GPT-4o.
+🤖 Sou a Grana IA, seu assistente financeiro inteligente.
+
+✅ *Conta vinculada com sucesso!*
+Agora você tem acesso completo a todos os recursos.
 
 💡 *O que posso fazer por você:*
 💰 Processar transações em linguagem natural
