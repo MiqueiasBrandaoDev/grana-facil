@@ -70,7 +70,14 @@ const Settings: React.FC = () => {
   };
 
   const updateProfile = async () => {
-    if (!user || !userProfile) return;
+    if (!user) {
+      toast({
+        title: "Erro",
+        description: "Usuário não encontrado. Faça login novamente.",
+        variant: "destructive"
+      });
+      return;
+    }
 
     if (phone && !validatePhone(phone)) {
       toast({
@@ -84,18 +91,45 @@ const Settings: React.FC = () => {
     setIsLoading(true);
 
     try {
-      const { error } = await supabase
+      console.log('🔄 Atualizando perfil do usuário:', user.id);
+      console.log('📱 Telefone:', phone);
+      console.log('👤 Nome:', fullName);
+
+      // Primeiro, verificar se usuário existe na tabela users
+      const { data: existingUser, error: fetchError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+
+      if (fetchError) {
+        console.error('❌ Erro ao buscar usuário:', fetchError);
+        throw new Error(`Erro ao buscar usuário: ${fetchError.message}`);
+      }
+
+      if (!existingUser) {
+        throw new Error('Usuário não encontrado na base de dados');
+      }
+
+      console.log('✅ Usuário encontrado:', existingUser);
+
+      // Atualizar dados
+      const { data, error } = await supabase
         .from('users')
         .update({
           phone: phone || null,
-          full_name: fullName,
+          full_name: fullName || existingUser.full_name,
           updated_at: new Date().toISOString()
         })
-        .eq('id', user.id);
+        .eq('id', user.id)
+        .select();
 
       if (error) {
+        console.error('❌ Erro na atualização:', error);
         throw error;
       }
+
+      console.log('✅ Perfil atualizado:', data);
 
       toast({
         title: "Perfil Atualizado",
@@ -105,6 +139,7 @@ const Settings: React.FC = () => {
       // Se telefone foi configurado, enviar mensagem de confirmação
       if (phone && validatePhone(phone)) {
         try {
+          console.log('📤 Enviando mensagem de confirmação...');
           const webhookService = createEvolutionWebhookService();
           await webhookService.sendWelcomeMessage(phone, fullName);
           
@@ -115,6 +150,11 @@ const Settings: React.FC = () => {
         } catch (whatsappError) {
           console.error('Erro ao enviar mensagem WhatsApp:', whatsappError);
           // Não falhar o processo se WhatsApp der erro
+          toast({
+            title: "Perfil Salvo",
+            description: "Perfil salvo, mas não foi possível enviar mensagem WhatsApp.",
+            variant: "default"
+          });
         }
       }
 
@@ -122,10 +162,19 @@ const Settings: React.FC = () => {
       await loadUserProfile();
 
     } catch (error) {
-      console.error('Erro ao atualizar perfil:', error);
+      console.error('❌ Erro ao atualizar perfil:', error);
+      
+      let errorMessage = "Não foi possível atualizar o perfil.";
+      
+      if (error.message?.includes('column "phone" does not exist')) {
+        errorMessage = "Campo telefone não existe no banco. Execute a migration primeiro.";
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
       toast({
         title: "Erro",
-        description: "Não foi possível atualizar o perfil. Tente novamente.",
+        description: errorMessage,
         variant: "destructive"
       });
     } finally {
