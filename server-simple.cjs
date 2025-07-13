@@ -219,6 +219,9 @@ async function findUserByPhone(phoneNumber) {
 
 async function createTempUser(phoneNumber, displayName) {
   try {
+    // Gerar UUID para o usuário
+    const userId = generateUUID();
+    
     const response = await fetch(`${SUPABASE_URL}/rest/v1/users`, {
       method: 'POST',
       headers: {
@@ -228,6 +231,7 @@ async function createTempUser(phoneNumber, displayName) {
         'Prefer': 'return=representation'
       },
       body: JSON.stringify({
+        id: userId,
         phone: phoneNumber,
         full_name: displayName || `Lead WhatsApp ${phoneNumber.slice(-4)}`,
         email: `${phoneNumber}@whatsapp.temp`,
@@ -237,16 +241,27 @@ async function createTempUser(phoneNumber, displayName) {
     });
 
     if (!response.ok) {
-      console.error('Erro HTTP ao criar usuário:', response.status, await response.text());
+      const errorText = await response.text();
+      console.error('Erro HTTP ao criar usuário:', response.status, errorText);
       return null;
     }
     
     const data = await response.json();
+    console.log('✅ Usuário criado:', data[0]?.id);
     return data[0];
   } catch (error) {
     console.error('❌ Erro ao criar usuário:', error);
     return null;
   }
+}
+
+// Função para gerar UUID simples
+function generateUUID() {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0;
+    const v = c == 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
 }
 
 async function saveMessage(userId, messageText, sender) {
