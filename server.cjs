@@ -41,7 +41,9 @@ app.use('/api', (req, res, next) => {
 app.post('/api/evolution/webhook', async (req, res) => {
   try {
     console.log('\\n🎯 WEBHOOK EVOLUTION API RECEBIDO:');
-    console.log('Headers:', req.headers);
+    console.log('URL:', req.url);
+    console.log('Method:', req.method);
+    console.log('Headers:', JSON.stringify(req.headers, null, 2));
     console.log('Body:', JSON.stringify(req.body, null, 2));
 
     const payload = req.body;
@@ -77,7 +79,14 @@ app.post('/api/evolution/webhook', async (req, res) => {
     res.status(200).json({ success: true, message: 'Webhook processado' });
   } catch (error) {
     console.error('\\n❌ Erro no webhook:', error);
-    res.status(500).json({ error: 'Erro interno', details: error.message });
+    console.error('Stack trace:', error.stack);
+    
+    // Sempre retornar 200 para não fazer a Evolution API reenviar
+    res.status(200).json({ 
+      success: false, 
+      error: 'Erro no processamento', 
+      details: error.message 
+    });
   }
 });
 
@@ -427,9 +436,60 @@ Continue usando a plataforma web para acesso completo! 💪`;
 // Servir arquivos estáticos do React
 app.use(express.static(path.join(__dirname, 'dist')));
 
-// Todas as rotas que não são da API servem o React
-app.get('*', (req, res) => {
+// Health check específico
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// Catch-all para o React (apenas para rotas que não são da API)
+app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+});
+
+app.get('/dashboard*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+});
+
+app.get('/transactions*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+});
+
+app.get('/settings*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+});
+
+app.get('/webhook*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+});
+
+app.get('/whatsapp*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+});
+
+app.get('/categories*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+});
+
+app.get('/reports*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+});
+
+app.get('/goals*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+});
+
+app.get('/bills*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+});
+
+// Fallback final para outras rotas
+app.get('*', (req, res) => {
+  // Se não é uma rota da API, serve o React
+  if (!req.path.startsWith('/api/')) {
+    res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+  } else {
+    res.status(404).json({ error: 'API endpoint not found' });
+  }
 });
 
 // ==========================================
