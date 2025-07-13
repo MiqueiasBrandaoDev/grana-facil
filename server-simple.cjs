@@ -71,8 +71,14 @@ app.post('/api/evolution/webhook', async (req, res) => {
     console.log(`📨 De: ${senderName} (${phoneNumber})`);
     console.log(`📝 Texto: ${messageText}`);
 
+    // Mostrar "digitando..." antes de processar
+    await setTypingIndicator(phoneNumber, true);
+    
     // Processar mensagem
     await processMessage(phoneNumber, messageText, senderName);
+    
+    // Parar "digitando..."
+    await setTypingIndicator(phoneNumber, false);
 
     console.log('✅ Processamento concluído');
     res.status(200).json({ success: true, message: 'Processado' });
@@ -2019,6 +2025,40 @@ async function sendMessage(to, text) {
   }
 }
 
+async function setTypingIndicator(to, isTyping) {
+  try {
+    if (!EVOLUTION_API_URL || !EVOLUTION_API_KEY || !EVOLUTION_INSTANCE_NAME) {
+      console.log('⚠️ APIs não configuradas, pulando indicador de digitação');
+      return;
+    }
+
+    const url = `${EVOLUTION_API_URL}/chat/presence/${EVOLUTION_INSTANCE_NAME}`;
+    
+    console.log(`⌨️ ${isTyping ? 'Iniciando' : 'Parando'} digitação para ${to}`);
+    
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'apikey': EVOLUTION_API_KEY,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        number: to,
+        presence: isTyping ? 'composing' : 'available'
+      })
+    });
+
+    if (response.ok) {
+      console.log(`✅ Indicador de digitação ${isTyping ? 'ativado' : 'desativado'} para ${to}`);
+    } else {
+      const error = await response.text();
+      console.log(`⚠️ Erro no indicador de digitação para ${to}:`, error);
+    }
+  } catch (error) {
+    console.log('⚠️ Erro no indicador de digitação:', error.message);
+  }
+}
+
 async function sendPresentation(to, userName) {
   const text = `🎉 *Olá${userName ? ` ${userName}` : ''}! Bem-vindo à Grana Fácil!*
 
@@ -2114,17 +2154,7 @@ async function generateUserResponse(command, user) {
     // Usar AI Agent completo para usuários cadastrados
     const response = await processWithAIAgent(command, user);
     
-    return `🤖 *${user.full_name}*, processando seu comando: "${command}"
-
-${response}
-
-💡 *Recursos disponíveis:*
-• Análise financeira completa
-• Gestão de categorias automática
-• Controle de metas e orçamentos
-• Integração completa com sua conta
-
-Continue usando também a plataforma web para acesso visual! 💪`;
+    return response;
 
   } catch (error) {
     console.error('❌ Erro ao processar com AI Agent:', error);
