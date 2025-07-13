@@ -1,0 +1,23 @@
+# 🐳 DOCKERFILE PARA SERVIDOR DE WEBHOOK
+# Container separado só para receber webhooks
+
+FROM node:18-alpine
+
+# Definir diretório de trabalho
+WORKDIR /app
+
+# Instalar dependências básicas
+RUN npm init -y && npm install express cors --save
+
+# Copiar servidor de webhook
+COPY webhook-server-production.js ./server.js
+
+# Expor porta do webhook
+EXPOSE 3001
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:3001/webhook/test || exit 1
+
+# Comando para iniciar servidor
+CMD ["node", "server.js"]

@@ -1,0 +1,1 @@
+organizar o sidebar, as configurações ficam escondidas. Aproveite e deixe o sistema 100% responsivo
