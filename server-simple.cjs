@@ -1083,33 +1083,718 @@ RESPOSTA (JSON obrigatório):
     return '📂';
   }
 
-  // Placeholder methods for other actions - full implementation would be added here
+  /**
+   * 🏷️ Criar categoria automaticamente
+   */
   async createCategory(data) {
-    return { success: false, message: 'createCategory ainda não implementado no WhatsApp' };
+    try {
+      console.log('🏷️ createCategory chamada com dados:', data);
+      
+      // Validar dados obrigatórios - aceitar tanto 'name' quanto 'category'
+      const categoryName = data.name || data.category;
+      if (!categoryName) {
+        console.log('❌ Nome da categoria não fornecido');
+        return { 
+          success: false, 
+          message: '❌ Nome da categoria é obrigatório para criar uma categoria.' 
+        };
+      }
+      
+      console.log('✅ Nome da categoria encontrado:', categoryName);
+
+      // Se o tipo não foi especificado, tentar detectar automaticamente
+      let categoryType = data.type;
+      console.log('🔍 Tipo inicial da categoria:', categoryType);
+      
+      if (!categoryType) {
+        const detectedType = this.detectObviousCategoryType(categoryName);
+        if (detectedType) {
+          categoryType = detectedType;
+          console.log(`✅ Tipo detectado automaticamente para "${categoryName}": ${detectedType}`);
+        } else {
+          // Se não conseguir detectar, usar 'expense' como padrão
+          categoryType = 'expense';
+          console.log(`⚠️ Tipo não detectado para "${categoryName}", usando 'expense' como padrão`);
+        }
+      }
+
+      const categoryData = {
+        user_id: this.userContext.userId,
+        name: categoryName,
+        type: categoryType,
+        budget: data.budget || (categoryType === 'income' ? 0 : 500),
+        color: data.color || this.getRandomColor(),
+        icon: data.icon || this.getCategoryIcon(categoryName)
+      };
+
+      console.log('💾 Criando categoria no banco:', categoryData);
+
+      const response = await fetch(`${SUPABASE_URL}/rest/v1/categories`, {
+        method: 'POST',
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=representation'
+        },
+        body: JSON.stringify(categoryData)
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ Erro do Supabase ao criar categoria:', errorText);
+        throw new Error(`Erro HTTP ${response.status}: ${errorText}`);
+      }
+
+      const insertedData = await response.json();
+      console.log('✅ Categoria criada com sucesso:', insertedData);
+
+      const typeText = categoryType === 'income' ? 'Receita' : 'Despesa';
+      const budgetText = categoryType === 'income' ? 'sem orçamento' : `R$ ${categoryData.budget.toFixed(2)}`;
+
+      const successMessage = `🏷️ Categoria "${categoryName}" criada com sucesso!\n💰 ${typeText} - ${budgetText}\n${this.getCategoryIcon(categoryName)} Ícone aplicado automaticamente`;
+      console.log('📤 Retornando sucesso:', successMessage);
+
+      return {
+        success: true,
+        message: successMessage
+      };
+    } catch (error) {
+      console.error('❌ Erro detalhado ao criar categoria:', error);
+      const errorMessage = `❌ Erro ao criar categoria: ${error instanceof Error ? error.message : 'Erro desconhecido'}`;
+      console.log('📤 Retornando erro:', errorMessage);
+      return { 
+        success: false, 
+        message: errorMessage
+      };
+    }
   }
 
+  /**
+   * 🎯 Criar meta financeira
+   */
   async createGoal(data) {
-    return { success: false, message: 'createGoal ainda não implementado no WhatsApp' };
+    try {
+      const goalData = {
+        user_id: this.userContext.userId,
+        title: data.title,
+        description: data.description,
+        target_amount: data.target_amount,
+        current_amount: 0,
+        target_date: data.target_date,
+        status: 'active'
+      };
+
+      const response = await fetch(`${SUPABASE_URL}/rest/v1/goals`, {
+        method: 'POST',
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(goalData)
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Erro HTTP ${response.status}: ${errorText}`);
+      }
+
+      return {
+        success: true,
+        message: `🎯 Meta "${data.title}" criada! Objetivo: R$ ${data.target_amount.toFixed(2)}`
+      };
+    } catch (error) {
+      return { success: false, message: 'Erro ao criar meta' };
+    }
   }
 
+  /**
+   * 🔄 Atualizar meta financeira existente
+   */
   async updateGoal(data) {
-    return { success: false, message: 'updateGoal ainda não implementado no WhatsApp' };
+    try {
+      console.log('🔄 updateGoal chamada com dados:', data);
+      
+      const context = this.userContext;
+      
+      // Se não especificou qual meta, tentar encontrar a meta mais recente ou ativa
+      let goalToUpdate = null;
+      
+      if (data.goal_id || data.id) {
+        // Se especificou ID da meta
+        const goalId = data.goal_id || data.id;
+        goalToUpdate = context.goals.find(g => g.id === goalId);
+      } else if (data.title || data.name) {
+        // Se especificou título da meta
+        const searchTerm = (data.title || data.name).toLowerCase();
+        goalToUpdate = context.goals.find(g => 
+          g.title.toLowerCase().includes(searchTerm) ||
+          searchTerm.includes(g.title.toLowerCase())
+        );
+      } else {
+        // Buscar a meta mais recente ativa
+        goalToUpdate = context.goals
+          .filter(g => g.status === 'active')
+          .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
+      }
+      
+      if (!goalToUpdate) {
+        return {
+          success: false,
+          message: '❌ Nenhuma meta encontrada para atualizar. Especifique qual meta ou crie uma nova meta primeiro.'
+        };
+      }
+      
+      console.log('🎯 Meta encontrada para atualizar:', goalToUpdate);
+      
+      // Preparar dados de atualização
+      const updateData = {};
+      
+      if (data.target_amount !== undefined) {
+        updateData.target_amount = data.target_amount;
+      }
+      
+      if (data.title && data.title !== goalToUpdate.title) {
+        updateData.title = data.title;
+      }
+      
+      if (data.description !== undefined) {
+        updateData.description = data.description;
+      }
+      
+      if (data.target_date !== undefined) {
+        updateData.target_date = data.target_date;
+      }
+      
+      if (data.current_amount !== undefined) {
+        updateData.current_amount = data.current_amount;
+      }
+      
+      // Se for aporte, adicionar ao valor atual
+      if (data.aporte !== undefined) {
+        updateData.current_amount = (goalToUpdate.current_amount || 0) + data.aporte;
+      }
+      
+      console.log('💾 Atualizando meta com dados:', updateData);
+      
+      const response = await fetch(`${SUPABASE_URL}/rest/v1/goals?id=eq.${goalToUpdate.id}&user_id=eq.${context.userId}`, {
+        method: 'PATCH',
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(updateData)
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ Erro do Supabase ao atualizar meta:', errorText);
+        throw new Error(`Erro HTTP ${response.status}: ${errorText}`);
+      }
+      
+      console.log('✅ Meta atualizada com sucesso');
+      
+      // Construir mensagem de sucesso
+      let successMessage = `🎯 Meta "${goalToUpdate.title}" atualizada com sucesso!\n`;
+      
+      if (data.target_amount !== undefined) {
+        successMessage += `💰 Novo objetivo: R$ ${data.target_amount.toFixed(2)}\n`;
+      }
+      
+      if (data.current_amount !== undefined) {
+        successMessage += `📈 Valor atual: R$ ${data.current_amount.toFixed(2)}\n`;
+      }
+      
+      if (data.aporte !== undefined) {
+        successMessage += `💰 Aporte de R$ ${data.aporte.toFixed(2)} adicionado!\n📈 Novo progresso: R$ ${updateData.current_amount.toFixed(2)}\n`;
+      }
+      
+      const newTarget = data.target_amount || goalToUpdate.target_amount;
+      const newCurrent = updateData.current_amount || data.current_amount || goalToUpdate.current_amount;
+      const progress = newTarget > 0 ? (newCurrent / newTarget) * 100 : 0;
+      
+      successMessage += `📊 Progresso: ${progress.toFixed(1)}%`;
+      
+      console.log('📤 Retornando sucesso:', successMessage);
+      
+      return {
+        success: true,
+        message: successMessage
+      };
+      
+    } catch (error) {
+      console.error('❌ Erro detalhado ao atualizar meta:', error);
+      const errorMessage = `❌ Erro ao atualizar meta: ${error instanceof Error ? error.message : 'Erro desconhecido'}`;
+      console.log('📤 Retornando erro:', errorMessage);
+      return { 
+        success: false, 
+        message: errorMessage
+      };
+    }
   }
 
+  /**
+   * 📄 Criar nova conta a pagar/receber
+   */
   async createBill(data) {
-    return { success: false, message: 'createBill ainda não implementado no WhatsApp' };
+    try {
+      console.log('📄 createBill chamada com dados:', data);
+      
+      const context = this.userContext;
+      
+      // Validar dados obrigatórios
+      if (!data.title && !data.name) {
+        console.log('❌ Nome/título da conta não fornecido');
+        return {
+          success: false,
+          message: '❌ Nome da conta é obrigatório para criar uma conta.'
+        };
+      }
+      
+      if (!data.amount || data.amount <= 0) {
+        console.log('❌ Amount inválido:', data.amount);
+        return {
+          success: false,
+          message: '❌ Valor da conta é obrigatório e deve ser maior que zero.\n\n💡 Exemplo: "Crie uma conta de luz de R$ 250 que vence todo dia 10"'
+        };
+      }
+      
+      const billTitle = data.title || data.name;
+      
+      // Determinar tipo da conta (payable ou receivable)
+      let billType = data.type || 'payable'; // Padrão: conta a pagar
+      if (data.bill_type) {
+        billType = data.bill_type;
+      }
+      
+      // Calcular data de vencimento
+      let dueDate = new Date();
+      if (data.due_date) {
+        dueDate = new Date(data.due_date);
+      } else if (data.due_day) {
+        // Se especificou dia do vencimento (ex: todo dia 10)
+        dueDate = new Date();
+        dueDate.setDate(data.due_day);
+        
+        // Se o dia já passou neste mês, próximo mês
+        if (dueDate < new Date()) {
+          dueDate.setMonth(dueDate.getMonth() + 1);
+        }
+      } else {
+        // Padrão: vence em 30 dias
+        dueDate.setDate(dueDate.getDate() + 30);
+      }
+      
+      // Determinar se é recorrente
+      const isRecurring = data.recurring !== false; // Padrão: true para contas mensais
+      
+      const billData = {
+        user_id: context.userId,
+        title: billTitle,
+        description: data.description || `Conta ${billType === 'payable' ? 'a pagar' : 'a receber'}: ${billTitle}`,
+        amount: data.amount,
+        type: billType,
+        due_date: dueDate.toISOString().split('T')[0], // Apenas a data, sem hora
+        status: 'pending',
+        is_recurring: isRecurring,
+        recurring_interval: data.recurring_interval || 'monthly',
+        recurring_day: data.due_day || dueDate.getDate()
+      };
+      
+      console.log('💾 Criando conta no banco:', billData);
+      
+      const response = await fetch(`${SUPABASE_URL}/rest/v1/bills`, {
+        method: 'POST',
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=representation'
+        },
+        body: JSON.stringify(billData)
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ Erro do Supabase ao criar conta:', errorText);
+        throw new Error(`Erro HTTP ${response.status}: ${errorText}`);
+      }
+      
+      const insertedData = await response.json();
+      console.log('✅ Conta criada com sucesso:', insertedData);
+      
+      const typeText = billType === 'payable' ? 'a pagar' : 'a receber';
+      const recurringText = isRecurring ? ` (${data.recurring_interval || 'mensal'})` : '';
+      
+      const successMessage = `📄 Conta "${billTitle}" criada com sucesso!\n💰 ${typeText.charAt(0).toUpperCase() + typeText.slice(1)}: R$ ${data.amount.toFixed(2)}${recurringText}\n📅 Vencimento: ${dueDate.toLocaleDateString('pt-BR')}\n${isRecurring ? `🔄 Conta recorrente (${data.recurring_interval || 'mensal'}) - dia ${data.due_day || dueDate.getDate()}` : '📝 Conta única'}`;
+      
+      console.log('📤 Retornando sucesso:', successMessage);
+      
+      return {
+        success: true,
+        message: successMessage
+      };
+      
+    } catch (error) {
+      console.error('❌ Erro detalhado ao criar conta:', error);
+      const errorMessage = `❌ Erro ao criar conta: ${error instanceof Error ? error.message : 'Erro desconhecido'}`;
+      console.log('📤 Retornando erro:', errorMessage);
+      return {
+        success: false,
+        message: errorMessage
+      };
+    }
   }
 
+  /**
+   * 📝 Atualizar conta existente
+   */
   async updateBill(data) {
-    return { success: false, message: 'updateBill ainda não implementado no WhatsApp' };
+    try {
+      console.log('📝 updateBill chamada com dados:', data);
+      
+      const context = this.userContext;
+      
+      // Encontrar conta para atualizar
+      let billToUpdate = null;
+      
+      if (data.id) {
+        billToUpdate = context.bills.find(b => b.id === data.id);
+      } else if (data.old_name || data.current_name) {
+        const searchName = data.old_name || data.current_name;
+        billToUpdate = context.bills.find(b => 
+          b.title.toLowerCase().includes(searchName.toLowerCase())
+        );
+      } else if (data.title || data.name) {
+        // Buscar por similaridade no nome
+        billToUpdate = context.bills.find(b => 
+          b.title.toLowerCase().includes((data.title || data.name).toLowerCase())
+        );
+      }
+      
+      if (!billToUpdate) {
+        return {
+          success: false,
+          message: '❌ Conta não encontrada para atualizar.'
+        };
+      }
+      
+      // Preparar dados para atualização
+      const updateData = {};
+      
+      if (data.title || data.new_name) {
+        updateData.title = data.title || data.new_name;
+      }
+      if (data.amount && data.amount > 0) {
+        updateData.amount = data.amount;
+      }
+      if (data.due_date) {
+        updateData.due_date = data.due_date;
+      }
+      if (data.due_day) {
+        updateData.due_date = `2024-${String(new Date().getMonth() + 1).padStart(2, '0')}-${String(data.due_day).padStart(2, '0')}`;
+      }
+      
+      console.log('📝 Atualizando conta:', billToUpdate.id, updateData);
+      
+      const response = await fetch(`${SUPABASE_URL}/rest/v1/bills?id=eq.${billToUpdate.id}&user_id=eq.${context.userId}`, {
+        method: 'PATCH',
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(updateData)
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ Erro ao atualizar conta:', errorText);
+        throw new Error(`Erro ao atualizar conta: ${errorText}`);
+      }
+      
+      const updatedName = updateData.title || billToUpdate.title;
+      const successMessage = `✅ Conta "${updatedName}" atualizada com sucesso!`;
+      
+      console.log('📤 Retornando sucesso:', successMessage);
+      
+      return {
+        success: true,
+        message: successMessage
+      };
+      
+    } catch (error) {
+      console.error('❌ Erro ao atualizar conta:', error);
+      return {
+        success: false,
+        message: `❌ Erro ao atualizar conta: ${error instanceof Error ? error.message : 'Erro desconhecido'}`
+      };
+    }
   }
 
+  /**
+   * 🗑️ Excluir conta
+   */
   async deleteBill(data) {
-    return { success: false, message: 'deleteBill ainda não implementado no WhatsApp' };
+    try {
+      console.log('🗑️ deleteBill chamada com dados:', data);
+      
+      const context = this.userContext;
+      
+      // Encontrar conta para excluir
+      let billToDelete = null;
+      
+      if (data.id) {
+        billToDelete = context.bills.find(b => b.id === data.id);
+      } else if (data.title || data.name) {
+        const searchName = (data.title || data.name).toLowerCase();
+        billToDelete = context.bills.find(b => 
+          b.title.toLowerCase().includes(searchName) ||
+          b.title.toLowerCase() === searchName
+        );
+      }
+      
+      if (!billToDelete) {
+        return {
+          success: false,
+          message: `❌ Conta "${data.title || data.name || 'especificada'}" não encontrada para exclusão.`
+        };
+      }
+      
+      console.log('🗑️ Excluindo conta:', billToDelete.id, billToDelete.title);
+      
+      const response = await fetch(`${SUPABASE_URL}/rest/v1/bills?id=eq.${billToDelete.id}&user_id=eq.${context.userId}`, {
+        method: 'DELETE',
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ Erro ao excluir conta:', errorText);
+        throw new Error(`Erro ao excluir conta: ${errorText}`);
+      }
+      
+      const successMessage = `🗑️ Conta "${billToDelete.title}" excluída com sucesso!`;
+      
+      console.log('📤 Retornando sucesso:', successMessage);
+      
+      return {
+        success: true,
+        message: successMessage
+      };
+      
+    } catch (error) {
+      console.error('❌ Erro ao excluir conta:', error);
+      return {
+        success: false,
+        message: `❌ Erro ao excluir conta: ${error instanceof Error ? error.message : 'Erro desconhecido'}`
+      };
+    }
   }
 
+  /**
+   * 💳 Marcar conta como paga E criar transação automaticamente
+   */
   async payBill(data) {
-    return { success: false, message: 'payBill ainda não implementado no WhatsApp' };
+    try {
+      console.log('💳 payBill chamada com dados:', data);
+      
+      const context = this.userContext;
+      
+      // Encontrar conta(s) para pagar
+      let billsToPay = [];
+      
+      if (data.bill_id || data.id) {
+        // Pagar conta específica por ID
+        const bill = context.bills.find(b => b.id === (data.bill_id || data.id) && b.status === 'pending');
+        if (bill) billsToPay.push(bill);
+      } else if (data.title || data.name) {
+        // Pagar conta específica por nome
+        const bill = context.bills.find(b => 
+          b.title.toLowerCase().includes((data.title || data.name).toLowerCase()) && 
+          b.status === 'pending'
+        );
+        if (bill) billsToPay.push(bill);
+      } else if (data.pay_all === true || data.all === true) {
+        // Pagar todas as contas pendentes
+        billsToPay = context.bills.filter(b => b.status === 'pending');
+      } else {
+        // Se não especificou, tentar encontrar a conta mais próxima do vencimento
+        billsToPay = context.bills
+          .filter(b => b.status === 'pending')
+          .sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime())
+          .slice(0, 1);
+      }
+      
+      if (billsToPay.length === 0) {
+        return {
+          success: false,
+          message: '❌ Nenhuma conta pendente encontrada para pagamento.'
+        };
+      }
+      
+      console.log('💰 Contas para pagar:', billsToPay);
+      
+      // PARA CADA CONTA: 1. Marcar como paga 2. Criar transação correspondente
+      const processedBills = [];
+      
+      for (const bill of billsToPay) {
+        console.log(`🔄 Processando conta: ${bill.title}`);
+        
+        // 1. Marcar conta como paga
+        const billUpdateResponse = await fetch(`${SUPABASE_URL}/rest/v1/bills?id=eq.${bill.id}&user_id=eq.${context.userId}`, {
+          method: 'PATCH',
+          headers: {
+            'apikey': SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            status: 'paid',
+            updated_at: new Date().toISOString()
+          })
+        });
+          
+        if (!billUpdateResponse.ok) {
+          const errorText = await billUpdateResponse.text();
+          console.error(`❌ Erro ao marcar conta ${bill.title} como paga:`, errorText);
+          throw new Error(`Erro ao atualizar conta ${bill.title}: ${errorText}`);
+        }
+        
+        // 2. Criar transação correspondente
+        const transactionType = bill.type === 'payable' ? 'expense' : 'income';
+        const transactionAmount = bill.type === 'payable' ? -Math.abs(bill.amount) : Math.abs(bill.amount);
+        
+        // Buscar categoria apropriada ou usar uma padrão
+        let categoryId = bill.category_id;
+        if (!categoryId) {
+          // Buscar categoria "Outros" do tipo correto
+          const defaultCategory = context.categories.find(c => 
+            c.type === transactionType && c.name.toLowerCase().includes('outros')
+          );
+          categoryId = defaultCategory?.id || null;
+        }
+        
+        const transactionData = {
+          user_id: context.userId,
+          category_id: categoryId,
+          description: `Pagamento: ${bill.title}`,
+          amount: transactionAmount,
+          type: transactionType,
+          status: 'completed',
+          transaction_date: new Date().toISOString().split('T')[0],
+          payment_method: 'transfer' // Método padrão
+        };
+        
+        console.log(`💰 Criando transação para ${bill.title}:`, transactionData);
+        
+        const transactionResponse = await fetch(`${SUPABASE_URL}/rest/v1/transactions`, {
+          method: 'POST',
+          headers: {
+            'apikey': SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+            'Content-Type': 'application/json',
+            'Prefer': 'return=representation'
+          },
+          body: JSON.stringify(transactionData)
+        });
+          
+        if (!transactionResponse.ok) {
+          const errorText = await transactionResponse.text();
+          console.error(`❌ Erro ao criar transação para ${bill.title}:`, errorText);
+          throw new Error(`Erro ao criar transação para ${bill.title}: ${errorText}`);
+        }
+        
+        const transaction = await transactionResponse.json();
+        console.log(`✅ Transação criada para ${bill.title}:`, transaction[0]?.id);
+        processedBills.push({ bill, transaction: transaction[0] });
+      }
+      
+      console.log('✅ Todas as contas processadas com sucesso');
+      
+      // Construir mensagem de sucesso
+      let successMessage = '';
+      
+      if (processedBills.length === 1) {
+        const { bill, transaction } = processedBills[0];
+        const typeText = bill.type === 'payable' ? 'Despesa' : 'Receita';
+        successMessage = `💳 Conta "${bill.title}" marcada como paga!\n💰 Valor: R$ ${bill.amount.toFixed(2)}\n📊 ${typeText} registrada no Dashboard e Transações`;
+      } else {
+        const totalAmount = processedBills.reduce((sum, { bill }) => sum + bill.amount, 0);
+        successMessage = `💳 ${processedBills.length} contas marcadas como pagas!\n💰 Total: R$ ${totalAmount.toFixed(2)}\n📊 Todas as transações registradas\n\n📋 Contas processadas:\n`;
+        processedBills.forEach(({ bill }) => {
+          const typeText = bill.type === 'payable' ? '💸' : '💰';
+          successMessage += `${typeText} ${bill.title} - R$ ${bill.amount.toFixed(2)}\n`;
+        });
+      }
+      
+      console.log('📤 Retornando sucesso:', successMessage);
+      
+      return {
+        success: true,
+        message: successMessage
+      };
+      
+    } catch (error) {
+      console.error('❌ Erro detalhado ao pagar conta:', error);
+      const errorMessage = `❌ Erro ao pagar conta: ${error instanceof Error ? error.message : 'Erro desconhecido'}`;
+      console.log('📤 Retornando erro:', errorMessage);
+      return { 
+        success: false, 
+        message: errorMessage
+      };
+    }
+  }
+
+  /**
+   * 🔍 Detectar automaticamente o tipo de categoria quando óbvio
+   */
+  detectObviousCategoryType(categoryName) {
+    const name = categoryName.toLowerCase();
+    
+    // Palavras-chave que indicam RECEITA claramente
+    const incomeKeywords = [
+      'salário', 'salario', 'freelance', 'freela', 'trabalho extra',
+      'venda', 'vendas', 'comissão', 'bonificação', 'prêmio',
+      'aluguel recebido', 'dividendos', 'juros recebidos',
+      'consultoria', 'honorários', 'cachê', 'renda extra',
+      'monetização', 'ads', 'publicidade', 'patrocínio',
+      'receita', 'receitas', 'ganho', 'ganhos', 'renda', 'rendas'
+    ];
+    
+    // Palavras-chave que indicam DESPESA claramente
+    const expenseKeywords = [
+      'aluguel', 'financiamento', 'prestação', 'conta de luz',
+      'conta de água', 'conta de gás', 'internet', 'telefone',
+      'medicamentos', 'remédios', 'plano de saúde', 'seguro',
+      'iptu', 'ipva', 'multa', 'taxa', 'anuidade',
+      'mensalidade', 'matrícula', 'pensão', 'combustível',
+      'gasto', 'gastos', 'despesa', 'despesas', 'custo', 'custos',
+      'pagamento', 'pagamentos', 'conta', 'contas'
+    ];
+    
+    // Verificar se é receita óbvia
+    for (const keyword of incomeKeywords) {
+      if (name.includes(keyword)) {
+        return 'income';
+      }
+    }
+    
+    // Verificar se é despesa óbvia
+    for (const keyword of expenseKeywords) {
+      if (name.includes(keyword)) {
+        return 'expense';
+      }
+    }
+    
+    // Se não for óbvio, retorna null (precisa perguntar)
+    return null;
   }
 
   /**
