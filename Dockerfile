@@ -1,5 +1,5 @@
-# 🚀 DOCKERFILE SIMPLES PARA GRANA FÁCIL - EASYPANEL
-# Build e serve com Node.js usando 'serve'
+# 🚀 DOCKERFILE HÍBRIDO PARA GRANA FÁCIL - EASYPANEL
+# Build React + Servidor Node.js com API para webhooks
 
 FROM node:18-alpine
 
@@ -15,18 +15,18 @@ RUN npm ci --silent
 # Copiar código fonte
 COPY . .
 
-# Build da aplicação para produção
+# Build da aplicação React para produção
 RUN npm run build
 
-# Instalar 'serve' globalmente para servir arquivos estáticos
-RUN npm install -g serve
+# Instalar dependências do servidor (express, cors)
+RUN npm install express cors --save
 
-# Expor porta 3000 (padrão do serve)
+# Expor porta 3000
 EXPOSE 3000
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:3000/ || exit 1
+  CMD wget --no-verbose --tries=1 --spider http://localhost:3000/api/test || exit 1
 
-# Comando para servir a aplicação
-CMD ["serve", "-s", "dist", "-l", "3000"]
+# Comando para iniciar servidor híbrido
+CMD ["node", "server.js"]
