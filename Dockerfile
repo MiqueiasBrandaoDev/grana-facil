@@ -1,8 +1,7 @@
-# 🚀 DOCKERFILE PARA GRANA FÁCIL - EASYPANEL
-# Multi-stage build para otimizar tamanho da imagem
+# 🚀 DOCKERFILE SIMPLES PARA GRANA FÁCIL - EASYPANEL
+# Build e serve com Node.js usando 'serve'
 
-# Stage 1: Build da aplicação
-FROM node:18-alpine AS builder
+FROM node:18-alpine
 
 # Definir diretório de trabalho
 WORKDIR /app
@@ -10,8 +9,8 @@ WORKDIR /app
 # Copiar arquivos de dependência
 COPY package*.json ./
 
-# Instalar dependências
-RUN npm ci --only=production --silent
+# Instalar todas as dependências (incluindo dev para o build)
+RUN npm ci --silent
 
 # Copiar código fonte
 COPY . .
@@ -19,30 +18,15 @@ COPY . .
 # Build da aplicação para produção
 RUN npm run build
 
-# Stage 2: Servir com nginx
-FROM nginx:alpine AS production
+# Instalar 'serve' globalmente para servir arquivos estáticos
+RUN npm install -g serve
 
-# Instalar curl para health checks
-RUN apk add --no-cache curl
-
-# Remover configuração padrão do nginx
-RUN rm -rf /usr/share/nginx/html/*
-
-# Copiar build da aplicação
-COPY --from=builder /app/dist /usr/share/nginx/html
-
-# Copiar configuração customizada do nginx
-COPY nginx.conf /etc/nginx/nginx.conf
-
-# Criar diretório para logs
-RUN mkdir -p /var/log/nginx
-
-# Expor porta 80
-EXPOSE 80
+# Expor porta 3000 (padrão do serve)
+EXPOSE 3000
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost/ || exit 1
+  CMD wget --no-verbose --tries=1 --spider http://localhost:3000/ || exit 1
 
-# Comando para iniciar nginx
-CMD ["nginx", "-g", "daemon off;"]
+# Comando para servir a aplicação
+CMD ["serve", "-s", "dist", "-l", "3000"]
