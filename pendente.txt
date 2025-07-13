@@ -1,0 +1,9 @@
+Corrigit chat quando pede contas pendentes, ele volta todas as contas
+
+Dados estao aparecendo mesmo sem ser do usuario logado:, quando fazer logoff precisa quebrar todas as informações do usuario anterior.
+METAS
+ATIVIDADES RECENTES
+CATEGORIAS
+CONTAS
+CHAT(WHATSAPP)
+Tudo isso tem que ser unico por usuario

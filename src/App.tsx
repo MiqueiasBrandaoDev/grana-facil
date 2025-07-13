@@ -18,6 +18,11 @@ import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
+// Expor queryClient globalmente para logout seguro
+if (typeof window !== 'undefined') {
+  (window as any).queryClient = queryClient;
+}
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <ThemeProvider defaultTheme="system" storageKey="granafacil-theme">

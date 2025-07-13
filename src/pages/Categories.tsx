@@ -18,7 +18,7 @@ interface CategoryWithSpent extends Category {
 }
 
 const Categories: React.FC = () => {
-  const { categories, loading, error, deleteCategory } = useCategories();
+  const { categories, loading, error, deleteCategory, createDefaultCategories } = useCategories();
   const [categoriesWithSpent, setCategoriesWithSpent] = useState<CategoryWithSpent[]>([]);
   const [spentLoading, setSpentLoading] = useState(false);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
@@ -100,6 +100,14 @@ const Categories: React.FC = () => {
       console.error('Erro ao excluir categoria:', error);
     }
   };
+
+  // Criar categorias automaticamente se o usuário tiver poucas
+  useEffect(() => {
+    if (!loading && categories.length > 0 && categories.length < 10) {
+      console.log('🏷️ Criando categorias padrão automaticamente...');
+      createDefaultCategories().catch(console.error);
+    }
+  }, [categories.length, loading, createDefaultCategories]);
 
   if (loading) {
     return (

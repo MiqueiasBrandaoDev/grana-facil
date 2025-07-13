@@ -124,10 +124,42 @@ async function createTestUser(): Promise<User> {
 }
 
 /**
- * Logout do usuário
+ * Logout seguro - limpa todos os dados do usuário
  */
 export async function logout(): Promise<void> {
-  await supabase.auth.signOut();
+  try {
+    // 1. Limpar cache do React Query
+    if (typeof window !== 'undefined' && window.queryClient) {
+      console.log('🧹 Limpando cache do React Query...');
+      window.queryClient.clear();
+      window.queryClient.invalidateQueries();
+    }
+
+    // 2. Limpar localStorage do chat (específico do usuário)
+    console.log('🧹 Limpando dados do localStorage...');
+    const keys = Object.keys(localStorage);
+    keys.forEach(key => {
+      if (key.startsWith('grana_') || key.includes('chat_history')) {
+        localStorage.removeItem(key);
+      }
+    });
+
+    // 3. Limpar contexto da IA
+    console.log('🧹 Limpando contexto da IA...');
+    if (typeof window !== 'undefined' && window.aiAgent) {
+      window.aiAgent.clearUserContext();
+    }
+
+    // 4. Fazer logout do Supabase
+    console.log('🧹 Fazendo logout do Supabase...');
+    await supabase.auth.signOut();
+    
+    console.log('✅ Logout seguro concluído');
+  } catch (error) {
+    console.error('❌ Erro durante logout seguro:', error);
+    // Mesmo com erro, tentar fazer logout básico
+    await supabase.auth.signOut();
+  }
 }
 
 /**
@@ -136,6 +168,7 @@ export async function logout(): Promise<void> {
 export function useAuth() {
   const [user, setUser] = React.useState<User | null>(null);
   const [loading, setLoading] = React.useState(true);
+  const [previousUserId, setPreviousUserId] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     let mounted = true;
@@ -155,13 +188,33 @@ export function useAuth() {
       async (event, session) => {
         if (mounted) {
           if (session?.user) {
-            setUser({
+            const newUser = {
               id: session.user.id,
               email: session.user.email || '',
               full_name: session.user.user_metadata?.full_name
-            });
+            };
+            
+            // Detectar mudança de usuário
+            if (previousUserId && previousUserId !== newUser.id) {
+              console.log('🔄 Mudança de usuário detectada - limpando dados...');
+              
+              // Limpar cache do React Query
+              if (typeof window !== 'undefined' && window.queryClient) {
+                window.queryClient.clear();
+                window.queryClient.invalidateQueries();
+              }
+              
+              // Limpar contexto da IA
+              if (typeof window !== 'undefined' && window.aiAgent) {
+                window.aiAgent.clearUserContext();
+              }
+            }
+            
+            setUser(newUser);
+            setPreviousUserId(newUser.id);
           } else {
             setUser(null);
+            setPreviousUserId(null);
           }
           setLoading(false);
         }
@@ -172,7 +225,7 @@ export function useAuth() {
       mounted = false;
       subscription.unsubscribe();
     };
-  }, []);
+  }, [previousUserId]);
 
   return { user, loading };
 }

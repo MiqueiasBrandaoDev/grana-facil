@@ -40,42 +40,125 @@ export const useMonthlyReport = () => {
         return;
       }
 
-      // Buscar resumo mensal
+      // Calcular período do mês atual
       const currentMonth = new Date();
       const firstDayOfMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
-      
-      const { data: monthlyData, error: monthlyError } = await supabase
-        .from('monthly_summary')
-        .select('*')
-        .eq('user_id', user.id)
-        .gte('month', firstDayOfMonth.toISOString())
-        .lt('month', new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1).toISOString())
-        .single();
+      const lastDayOfMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0, 23, 59, 59);
 
-      if (monthlyError && monthlyError.code !== 'PGRST116') {
-        throw monthlyError;
+      let totalIncome = 0;
+      let totalExpenses = 0;
+      let transactionCount = 0;
+      let topCategories: CategorySpending[] = [];
+
+      try {
+        // Tentar buscar da view monthly_summary primeiro
+        const { data: monthlyData, error: monthlyError } = await supabase
+          .from('monthly_summary')
+          .select('*')
+          .eq('user_id', user.id)
+          .single();
+
+        if (monthlyData && !monthlyError) {
+          totalIncome = monthlyData.total_income || 0;
+          totalExpenses = monthlyData.total_expenses || 0;
+          transactionCount = monthlyData.transaction_count || 0;
+        } else {
+          // Fallback: calcular manualmente das transações
+          console.log('View monthly_summary não disponível, calculando manualmente...');
+          
+          const { data: transactions, error: transError } = await supabase
+            .from('transactions')
+            .select('amount, type')
+            .eq('user_id', user.id)
+            .gte('transaction_date', firstDayOfMonth.toISOString())
+            .lte('transaction_date', lastDayOfMonth.toISOString());
+
+          if (transError) throw transError;
+
+          totalIncome = transactions?.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0) || 0;
+          totalExpenses = transactions?.filter(t => t.type === 'expense').reduce((sum, t) => sum + Math.abs(t.amount), 0) || 0;
+          transactionCount = transactions?.length || 0;
+        }
+      } catch (viewError) {
+        console.error('Erro na view monthly_summary, usando fallback:', viewError);
+        
+        // Fallback completo: buscar transações diretamente
+        const { data: transactions, error: transError } = await supabase
+          .from('transactions')
+          .select('amount, type')
+          .eq('user_id', user.id)
+          .gte('transaction_date', firstDayOfMonth.toISOString())
+          .lte('transaction_date', lastDayOfMonth.toISOString());
+
+        if (transError) throw transError;
+
+        totalIncome = transactions?.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0) || 0;
+        totalExpenses = transactions?.filter(t => t.type === 'expense').reduce((sum, t) => sum + Math.abs(t.amount), 0) || 0;
+        transactionCount = transactions?.length || 0;
       }
 
-      // Buscar gastos por categoria
-      const { data: categoryData, error: categoryError } = await supabase
-        .rpc('get_monthly_spending_by_category', {
-          input_user_id: user.id,
-          month_date: new Date().toISOString().slice(0, 10)
-        });
+      // Buscar gastos por categoria (com fallback)
+      try {
+        const { data: categoryData, error: categoryError } = await supabase
+          .rpc('get_monthly_spending_by_category', {
+            input_user_id: user.id,
+            month_date: new Date().toISOString().slice(0, 10)
+          });
 
-      if (categoryError) {
-        throw categoryError;
+        if (categoryData && !categoryError) {
+          topCategories = categoryData.sort((a, b) => b.total_spent - a.total_spent).slice(0, 5);
+        }
+      } catch (rpcError) {
+        console.error('Erro na função RPC, usando fallback para categorias:', rpcError);
+        
+        // Fallback: calcular categorias manualmente
+        const { data: categoryTransactions } = await supabase
+          .from('transactions')
+          .select(`
+            amount,
+            type,
+            categories (name, color, icon, budget)
+          `)
+          .eq('user_id', user.id)
+          .eq('type', 'expense')
+          .gte('transaction_date', firstDayOfMonth.toISOString())
+          .lte('transaction_date', lastDayOfMonth.toISOString());
+
+        if (categoryTransactions) {
+          const categoryMap = new Map();
+          
+          categoryTransactions.forEach(trans => {
+            const categoryName = trans.categories?.name || 'Sem categoria';
+            const amount = Math.abs(trans.amount);
+            
+            if (categoryMap.has(categoryName)) {
+              categoryMap.set(categoryName, {
+                ...categoryMap.get(categoryName),
+                total_spent: categoryMap.get(categoryName).total_spent + amount
+              });
+            } else {
+              categoryMap.set(categoryName, {
+                category_name: categoryName,
+                category_color: trans.categories?.color || '#6B7280',
+                category_icon: trans.categories?.icon || '📂',
+                total_spent: amount,
+                budget: trans.categories?.budget || 0,
+                percentage: 0
+              });
+            }
+          });
+
+          topCategories = Array.from(categoryMap.values())
+            .sort((a, b) => b.total_spent - a.total_spent)
+            .slice(0, 5)
+            .map(cat => ({
+              ...cat,
+              percentage: cat.budget > 0 ? (cat.total_spent / cat.budget) * 100 : 0
+            }));
+        }
       }
 
-      const totalIncome = monthlyData?.total_income || 0;
-      const totalExpenses = monthlyData?.total_expenses || 0;
       const netIncome = totalIncome - totalExpenses;
-      const transactionCount = monthlyData?.transaction_count || 0;
-
-      // Pegar top 5 categorias
-      const topCategories = (categoryData || [])
-        .sort((a, b) => b.total_spent - a.total_spent)
-        .slice(0, 5);
 
       setReport({
         totalIncome,
@@ -88,10 +171,28 @@ export const useMonthlyReport = () => {
       });
 
     } catch (error) {
-      console.error('Erro ao buscar relatório mensal:', error);
+      console.error('Erro crítico ao buscar relatório mensal:', error);
+      
+      // Mensagem de erro mais clara para o usuário
+      let userMessage = "❌ Não foi possível carregar o relatório mensal.";
+      
+      if (error instanceof Error) {
+        if (error.message.includes('406')) {
+          userMessage += "\n\n🔧 Problema com os dados do servidor. Nossos sistemas de backup estão funcionando, mas alguns recursos podem estar limitados.";
+        } else if (error.message.includes('network') || error.message.includes('fetch')) {
+          userMessage += "\n\n🌐 Problema de conexão. Verifique sua internet e tente novamente.";
+        } else {
+          userMessage += `\n\n⚠️ Erro técnico: ${error.message}`;
+        }
+      } else {
+        userMessage += "\n\n❓ Erro desconhecido detectado.";
+      }
+      
+      userMessage += "\n\n🔄 Você pode:\n• Recarregar a página\n• Tentar novamente em alguns minutos\n• Contatar o suporte se o problema persistir";
+      
       setReport(prev => ({
         ...prev,
-        error: 'Erro ao carregar relatório',
+        error: userMessage,
         loading: false
       }));
     }

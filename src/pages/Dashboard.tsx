@@ -19,6 +19,7 @@ import { useBalance } from '@/hooks/useBalance';
 import { useTransactions } from '@/hooks/useTransactions';
 import { useBills } from '@/hooks/useBills';
 import { useGoals } from '@/hooks/useGoals';
+import { useActivityLog } from '@/hooks/useActivityLog';
 
 const Dashboard: React.FC = () => {
   // Modal states
@@ -52,6 +53,14 @@ const Dashboard: React.FC = () => {
     summary: goalsSummary
   } = useGoals();
 
+  const {
+    activities,
+    loading: activitiesLoading,
+    refreshActivities,
+    formatCurrency: formatActivityCurrency,
+    formatTimestamp
+  } = useActivityLog();
+
   const monthlyBalance = monthlyNet;
   const balanceType = monthlyBalance > 0 ? 'positive' : monthlyBalance < 0 ? 'negative' : 'neutral';
 
@@ -59,6 +68,7 @@ const Dashboard: React.FC = () => {
   const handleTransactionAdded = () => {
     refreshBalance();
     refreshTransactions();
+    refreshActivities();
   };
 
   if (balanceLoading) {
@@ -251,6 +261,111 @@ const Dashboard: React.FC = () => {
             <span className="text-sm">Nova Meta</span>
           </Button>
         </div>
+      </div>
+
+      {/* Activity Log */}
+      <div className="bg-card rounded-xl border overflow-hidden">
+        <div className="p-6 border-b bg-gradient-to-r from-accent/5 to-primary/5">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-semibold text-foreground">Atividades Recentes</h2>
+              <p className="text-sm text-muted-foreground">Suas últimas movimentações financeiras</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 bg-primary rounded-full animate-pulse"></div>
+              <span className="text-xs text-muted-foreground">Ao vivo</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="max-h-96 overflow-y-auto">
+          {activitiesLoading ? (
+            <div className="p-8 text-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+              <p className="text-muted-foreground text-sm">Carregando atividades...</p>
+            </div>
+          ) : activities.length === 0 ? (
+            <div className="p-8 text-center">
+              <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4 opacity-50" />
+              <p className="text-muted-foreground">Nenhuma atividade recente</p>
+              <p className="text-sm text-muted-foreground">Comece adicionando transações para ver o histórico aqui</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-border/50">
+              {activities.map((activity, index) => {
+                const IconComponent = activity.icon === 'TrendingUp' ? TrendingUp :
+                                   activity.icon === 'TrendingDown' ? TrendingDown :
+                                   activity.icon === 'CreditCard' ? CreditCard :
+                                   activity.icon === 'Target' ? Target : Calendar;
+
+                return (
+                  <div key={activity.id} className="p-4 hover:bg-accent/30 transition-colors">
+                    <div className="flex items-start gap-4">
+                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${
+                        activity.color === 'success' ? 'bg-success/20 text-success' :
+                        activity.color === 'destructive' ? 'bg-destructive/20 text-destructive' :
+                        activity.color === 'primary' ? 'bg-primary/20 text-primary' :
+                        'bg-accent/20 text-accent'
+                      }`}>
+                        <IconComponent className="w-5 h-5" />
+                      </div>
+                      
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1">
+                            <h3 className="font-medium text-sm text-foreground">{activity.title}</h3>
+                            <p className="text-sm text-muted-foreground line-clamp-1 mt-0.5">
+                              {activity.description}
+                            </p>
+                            <p className="text-xs text-muted-foreground/70 mt-1">
+                              {formatTimestamp(activity.timestamp)}
+                            </p>
+                          </div>
+                          
+                          {activity.amount && (
+                            <div className="text-right shrink-0">
+                              <p className={`text-sm font-semibold ${
+                                activity.color === 'success' ? 'text-success' :
+                                activity.color === 'destructive' ? 'text-destructive' :
+                                'text-foreground'
+                              }`}>
+                                {activity.type === 'transaction_income' ? '+' : activity.type === 'transaction_expense' ? '-' : ''}
+                                {formatActivityCurrency(activity.amount)}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      
+                      {/* Indicador visual de novidade para itens recentes */}
+                      {index < 2 && (
+                        <div className="w-2 h-2 bg-primary rounded-full animate-pulse shrink-0 mt-2"></div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {activities.length > 0 && (
+          <div className="p-4 border-t bg-muted/30">
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-muted-foreground">
+                Mostrando {activities.length} atividades recentes
+              </p>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={refreshActivities}
+                className="text-xs h-auto p-1 hover:bg-transparent hover:text-primary"
+              >
+                Atualizar
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Modals */}

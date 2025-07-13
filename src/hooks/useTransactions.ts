@@ -15,6 +15,7 @@ export interface TransactionWithCategory extends Transaction {
 const TRANSACTIONS_QUERY_KEY = ['transactions'];
 
 const fetchTransactions = async (): Promise<TransactionWithCategory[]> => {
+  console.log('🔄 Buscando transações...');
   const user = await getCurrentUser();
   if (!user) {
     throw new Error('Usuário não autenticado');
@@ -61,6 +62,8 @@ const fetchTransactions = async (): Promise<TransactionWithCategory[]> => {
   }
 
   if (error) throw error;
+  
+  console.log('✅ Transações carregadas:', data?.length || 0);
   return data || [];
 };
 
@@ -74,8 +77,12 @@ export const useTransactions = () => {
   } = useQuery({
     queryKey: TRANSACTIONS_QUERY_KEY,
     queryFn: fetchTransactions,
-    staleTime: 5 * 60 * 1000, // 5 minutos
-    refetchOnWindowFocus: false,
+    staleTime: 5 * 1000,
+    refetchOnWindowFocus: true,
+    refetchInterval: 15 * 1000,
+    refetchOnMount: true,
+    // Invalidar automaticamente quando não há usuário autenticado
+    enabled: true
   });
 
   const addTransactionMutation = useMutation({
@@ -140,6 +147,13 @@ export const useTransactions = () => {
     }
   });
 
+  const forceRefresh = async () => {
+    console.log('🔄 Forçando atualização das transações...');
+    await queryClient.invalidateQueries({ queryKey: TRANSACTIONS_QUERY_KEY, exact: false });
+    await queryClient.refetchQueries({ queryKey: TRANSACTIONS_QUERY_KEY });
+    console.log('✅ Transações atualizadas forçadamente');
+  };
+
   return {
     transactions,
     loading,
@@ -148,6 +162,7 @@ export const useTransactions = () => {
     updateTransaction: (id: string, updates: Partial<TransactionInsert>) => 
       updateTransactionMutation.mutateAsync({ id, updates }),
     deleteTransaction: deleteTransactionMutation.mutateAsync,
-    refreshTransactions: () => queryClient.invalidateQueries({ queryKey: TRANSACTIONS_QUERY_KEY })
+    refreshTransactions: () => queryClient.invalidateQueries({ queryKey: TRANSACTIONS_QUERY_KEY }),
+    forceRefresh
   };
 };
