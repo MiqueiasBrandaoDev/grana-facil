@@ -1151,13 +1151,8 @@ app.get('/health', (req, res) => {
 // 🌐 SERVIR FRONTEND REACT
 // ==========================================
 
-// Servir arquivos estáticos
+// Servir arquivos estáticos primeiro
 app.use(express.static(path.join(__dirname, 'dist')));
-
-// SPA fallback - DEVE VIR POR ÚLTIMO
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
-});
 
 // ==========================================
 // 🔄 FUNÇÕES DE PROCESSAMENTO
@@ -1533,6 +1528,21 @@ Acesse a plataforma para ver gráficos detalhados!`;
 
 Continue usando a plataforma web para acesso completo!`;
 }
+
+// ==========================================
+// 🌐 SPA FALLBACK - DEVE VIR POR ÚLTIMO
+// ==========================================
+
+// SPA fallback para React Router - TODAS as rotas não-API servem index.html
+app.get('*', (req, res) => {
+  // Se for rota de API, retornar 404
+  if (req.path.startsWith('/api/')) {
+    return res.status(404).json({ error: `API route not found: ${req.path}` });
+  }
+  
+  console.log(`📄 Serving React SPA for route: ${req.path}`);
+  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+});
 
 // ==========================================
 // 🚀 INICIAR SERVIDOR
