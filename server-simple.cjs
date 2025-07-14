@@ -59,23 +59,49 @@ app.post('/api/evolution/webhook', async (req, res) => {
 
     // Extrair dados
     const phoneNumber = payload.data.key?.remoteJid?.replace('@s.whatsapp.net', '');
+    const senderName = payload.data.pushName || `Usuário ${phoneNumber?.slice(-4)}`;
+    
+    // Tipos de mensagem suportados
     const messageText = payload.data.message?.conversation || 
                        payload.data.message?.extendedTextMessage?.text;
-    const senderName = payload.data.pushName || `Usuário ${phoneNumber?.slice(-4)}`;
+    const audioMessage = payload.data.message?.audioMessage;
+    const imageMessage = payload.data.message?.imageMessage;
 
-    if (!messageText || !phoneNumber) {
-      console.log('❌ Mensagem inválida');
-      return res.status(200).json({ success: true, message: 'Mensagem inválida' });
+    if (!phoneNumber) {
+      console.log('❌ Número de telefone inválido');
+      return res.status(200).json({ success: true, message: 'Número inválido' });
     }
 
     console.log(`📨 De: ${senderName} (${phoneNumber})`);
-    console.log(`📝 Texto: ${messageText}`);
+    
+    // Determinar tipo de mensagem
+    let messageType = 'text';
+    let content = messageText;
+    
+    if (audioMessage) {
+      messageType = 'audio';
+      content = audioMessage.url || audioMessage.mimetype;
+      console.log(`🎵 Áudio recebido: ${audioMessage.mimetype}`);
+    } else if (imageMessage) {
+      messageType = 'image';
+      content = imageMessage.url || imageMessage.caption || 'Imagem recebida';
+      console.log(`🖼️ Imagem recebida: ${imageMessage.mimetype} - ${imageMessage.caption || 'Sem legenda'}`);
+    } else if (messageText) {
+      console.log(`📝 Texto: ${messageText}`);
+    } else {
+      console.log('❌ Tipo de mensagem não suportado');
+      return res.status(200).json({ success: true, message: 'Tipo não suportado' });
+    }
 
     // Mostrar "digitando..." antes de processar
     await setTypingIndicator(phoneNumber, true);
     
-    // Processar mensagem
-    await processMessage(phoneNumber, messageText, senderName);
+    // Processar mensagem com tipo e conteúdo
+    await processMessage(phoneNumber, content, senderName, messageType, {
+      audioMessage,
+      imageMessage,
+      originalPayload: payload.data
+    });
     
     // Parar "digitando..."
     await setTypingIndicator(phoneNumber, false);
@@ -1849,7 +1875,7 @@ app.use(express.static(path.join(__dirname, 'dist')));
 // 🔄 FUNÇÕES DE PROCESSAMENTO
 // ==========================================
 
-async function processMessage(phoneNumber, messageText, senderName) {
+async function processMessage(phoneNumber, messageText, senderName, messageType = 'text', mediaData = {}) {
   try {
     console.log('🔍 Buscando usuário...');
     
@@ -1883,7 +1909,7 @@ async function processMessage(phoneNumber, messageText, senderName) {
     if (isNewUser) {
       response = generateDemoResponse(messageText);
     } else {
-      response = await generateUserResponse(messageText, user);
+      response = await generateUserResponse(messageText, user, messageType, mediaData);
     }
 
     // Enviar resposta
@@ -2147,12 +2173,23 @@ Continue testando: "Quero economizar 2000 reais"`;
 *Cadastre-se para acesso completo!*`;
 }
 
-async function generateUserResponse(command, user) {
+async function generateUserResponse(command, user, messageType = 'text', mediaData = {}) {
   try {
-    console.log('🤖 Processando com AI Agent para usuário:', user.full_name);
+    console.log(`🤖 Processando ${messageType} com AI Agent para usuário:`, user.full_name);
+    
+    // Processar mídia primeiro se necessário
+    let processedCommand = command;
+    
+    if (messageType === 'audio') {
+      console.log('🎵 Processando áudio com Whisper...');
+      processedCommand = await processAudioWithWhisper(mediaData.audioMessage);
+    } else if (messageType === 'image') {
+      console.log('🖼️ Processando imagem com GPT-4o Vision...');
+      processedCommand = await processImageWithVision(mediaData.imageMessage, command);
+    }
     
     // Usar AI Agent completo para usuários cadastrados
-    const response = await processWithAIAgent(command, user);
+    const response = await processWithAIAgent(processedCommand, user);
     
     return response;
 
@@ -2270,6 +2307,156 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`📊 Status: http://0.0.0.0:${PORT}/api/evolution/status`);
   console.log('\\n✅ Pronto para receber webhooks!');
 });
+
+// ==========================================
+// 🎵 PROCESSAMENTO DE ÁUDIO - WHISPER
+// ==========================================
+
+async function processAudioWithWhisper(audioMessage) {
+  try {
+    console.log('🎵 Iniciando processamento de áudio...');
+    
+    if (!audioMessage || !audioMessage.url) {
+      throw new Error('URL do áudio não encontrada');
+    }
+    
+    // Baixar o áudio
+    console.log('📥 Baixando áudio:', audioMessage.url);
+    const audioResponse = await fetch(audioMessage.url);
+    
+    if (!audioResponse.ok) {
+      throw new Error(`Erro ao baixar áudio: ${audioResponse.status}`);
+    }
+    
+    const audioBuffer = await audioResponse.arrayBuffer();
+    
+    // Preparar FormData para Whisper API
+    const formData = new FormData();
+    const audioBlob = new Blob([audioBuffer], { type: audioMessage.mimetype || 'audio/ogg' });
+    formData.append('file', audioBlob, 'audio.ogg');
+    formData.append('model', 'whisper-1');
+    formData.append('language', 'pt'); // Português brasileiro
+    
+    // Chamar Whisper API
+    console.log('🤖 Enviando para Whisper API...');
+    const whisperResponse = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.VITE_OPENAI_API_KEY}`,
+      },
+      body: formData
+    });
+    
+    if (!whisperResponse.ok) {
+      throw new Error(`Erro na Whisper API: ${whisperResponse.status}`);
+    }
+    
+    const transcription = await whisperResponse.json();
+    console.log('✅ Áudio transcrito:', transcription.text);
+    
+    return transcription.text;
+    
+  } catch (error) {
+    console.error('❌ Erro ao processar áudio:', error);
+    return 'Desculpe, não consegui processar o áudio. Tente enviar uma mensagem de texto.';
+  }
+}
+
+// ==========================================
+// 🖼️ PROCESSAMENTO DE IMAGEM - GPT-4o VISION
+// ==========================================
+
+async function processImageWithVision(imageMessage, caption = '') {
+  try {
+    console.log('🖼️ Iniciando processamento de imagem...');
+    
+    if (!imageMessage || !imageMessage.url) {
+      throw new Error('URL da imagem não encontrada');
+    }
+    
+    // Baixar a imagem e converter para base64
+    console.log('📥 Baixando imagem:', imageMessage.url);
+    const imageResponse = await fetch(imageMessage.url);
+    
+    if (!imageResponse.ok) {
+      throw new Error(`Erro ao baixar imagem: ${imageResponse.status}`);
+    }
+    
+    const imageBuffer = await imageResponse.arrayBuffer();
+    const base64Image = Buffer.from(imageBuffer).toString('base64');
+    const mimeType = imageMessage.mimetype || 'image/jpeg';
+    
+    // Prompt específico para recibos financeiros
+    const systemPrompt = `Você é um assistente especializado em análise de recibos e comprovantes financeiros.
+
+Analise esta imagem e extraia as seguintes informações em português brasileiro:
+
+1. **Tipo de documento**: (recibo, nota fiscal, comprovante, etc.)
+2. **Valor total**: (valor principal da transação)
+3. **Estabelecimento**: (nome da loja/empresa)
+4. **Data**: (data da compra/transação)
+5. **Categoria sugerida**: (alimentação, transporte, saúde, etc.)
+6. **Descrição**: (resumo dos produtos/serviços)
+
+Se for um recibo de despesa, SEMPRE confirme: "Esta é uma DESPESA de R$ [valor] em [estabelecimento]?"
+
+Se não conseguir identificar claramente um valor ou estabelecimento, peça esclarecimentos.
+
+Formate a resposta de forma clara e objetiva.`;
+
+    // Chamar GPT-4o Vision
+    console.log('🤖 Enviando para GPT-4o Vision...');
+    const visionResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.VITE_OPENAI_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o',
+        messages: [
+          {
+            role: 'system',
+            content: systemPrompt
+          },
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'text',
+                text: caption ? `Legenda da imagem: "${caption}"\n\nAnalise esta imagem:` : 'Analise esta imagem:'
+              },
+              {
+                type: 'image_url',
+                image_url: {
+                  url: `data:${mimeType};base64,${base64Image}`,
+                  detail: 'high'
+                }
+              }
+            ]
+          }
+        ],
+        max_tokens: 1000,
+        temperature: 0.3
+      })
+    });
+    
+    if (!visionResponse.ok) {
+      throw new Error(`Erro na Vision API: ${visionResponse.status}`);
+    }
+    
+    const visionResult = await visionResponse.json();
+    const analysis = visionResult.choices[0].message.content;
+    
+    console.log('✅ Imagem analisada:', analysis);
+    
+    return analysis;
+    
+  } catch (error) {
+    console.error('❌ Erro ao processar imagem:', error);
+    return 'Desculpe, não consegui processar a imagem. Tente enviar uma descrição do recibo ou uma foto mais clara.';
+  }
+}
 
 // Tratamento de erros
 process.on('uncaughtException', (error) => {
