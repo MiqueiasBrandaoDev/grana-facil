@@ -94,13 +94,13 @@ const Dashboard: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Dashboard</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Dashboard</h1>
           <p className="text-muted-foreground">Visão geral das suas finanças</p>
         </div>
         <Button 
-          className="bg-gradient-primary hover:opacity-90 transition-opacity"
+          className="bg-gradient-primary hover:opacity-90 transition-opacity w-full sm:w-auto"
           onClick={() => {
             setTransactionType(undefined);
             setShowTransactionModal(true);
@@ -121,9 +121,9 @@ const Dashboard: React.FC = () => {
           <p className="text-muted-foreground mb-6 max-w-md mx-auto">
             Comece adicionando suas transações financeiras para ter controle total das suas finanças.
           </p>
-          <div className="flex gap-4 justify-center">
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Button 
-              className="bg-gradient-primary hover:opacity-90"
+              className="bg-gradient-primary hover:opacity-90 w-full sm:w-auto"
               onClick={() => {
                 setTransactionType(undefined);
                 setShowTransactionModal(true);
@@ -134,6 +134,7 @@ const Dashboard: React.FC = () => {
             </Button>
             <Button 
               variant="outline"
+              className="w-full sm:w-auto"
               onClick={() => setShowGoalModal(true)}
             >
               <Target className="w-4 h-4 mr-2" />
@@ -144,7 +145,7 @@ const Dashboard: React.FC = () => {
       )}
 
       {/* Financial Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
         <FinancialCard
           title="Saldo Total"
           value={formatCurrency(currentBalance)}
@@ -182,7 +183,7 @@ const Dashboard: React.FC = () => {
       </div>
 
       {/* Secondary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-6">
         <FinancialCard
           title="Contas Pendentes"
           value={`${billsSummary.pendingBills} contas`}
@@ -218,7 +219,7 @@ const Dashboard: React.FC = () => {
       {/* Quick Actions */}
       <div className="bg-card rounded-xl border p-6">
         <h2 className="text-xl font-semibold mb-4">Ações Rápidas</h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 xs:grid-cols-2 md:grid-cols-4 gap-4">
           <Button 
             variant="outline" 
             className="h-auto p-4 flex flex-col gap-2 hover:bg-success/10"
@@ -228,7 +229,7 @@ const Dashboard: React.FC = () => {
             }}
           >
             <TrendingUp className="w-5 h-5 text-success" />
-            <span className="text-sm">Adicionar Receita</span>
+            <span className="text-xs sm:text-sm">Adicionar Receita</span>
           </Button>
           
           <Button 
@@ -240,7 +241,7 @@ const Dashboard: React.FC = () => {
             }}
           >
             <TrendingDown className="w-5 h-5 text-destructive" />
-            <span className="text-sm">Registrar Gasto</span>
+            <span className="text-xs sm:text-sm">Registrar Gasto</span>
           </Button>
           
           <Button 
@@ -249,7 +250,7 @@ const Dashboard: React.FC = () => {
             onClick={() => setShowBillModal(true)}
           >
             <CreditCard className="w-5 h-5 text-primary" />
-            <span className="text-sm">Pagar Conta</span>
+            <span className="text-xs sm:text-sm">Pagar Conta</span>
           </Button>
           
           <Button 
@@ -258,7 +259,7 @@ const Dashboard: React.FC = () => {
             onClick={() => setShowGoalModal(true)}
           >
             <Target className="w-5 h-5 text-accent" />
-            <span className="text-sm">Nova Meta</span>
+            <span className="text-xs sm:text-sm">Nova Meta</span>
           </Button>
         </div>
       </div>

@@ -36,7 +36,7 @@ const FinancialCard: React.FC<FinancialCardProps> = ({
 
   return (
     <div className={cn(
-      "p-6 rounded-xl border shadow-sm transition-all duration-200 hover:shadow-md",
+      "p-4 sm:p-6 rounded-xl border shadow-sm transition-all duration-200 hover:shadow-md",
       gradientClasses[gradient],
       gradient === 'primary' || gradient === 'success' ? 'border-transparent text-white' : 'border-border',
       className
@@ -52,7 +52,7 @@ const FinancialCard: React.FC<FinancialCardProps> = ({
             {title}
           </p>
           <p className={cn(
-            "text-2xl font-bold",
+            "text-xl sm:text-2xl font-bold",
             gradient === 'primary' || gradient === 'success' 
               ? 'text-white' 
               : 'text-foreground'
@@ -72,13 +72,13 @@ const FinancialCard: React.FC<FinancialCardProps> = ({
         </div>
         
         <div className={cn(
-          "p-3 rounded-lg",
+          "p-2 sm:p-3 rounded-lg",
           gradient === 'primary' || gradient === 'success' 
             ? 'bg-white/20' 
             : 'bg-accent'
         )}>
           <Icon className={cn(
-            "w-6 h-6",
+            "w-5 h-5 sm:w-6 sm:h-6",
             gradient === 'primary' || gradient === 'success' 
               ? 'text-white' 
               : 'text-primary'

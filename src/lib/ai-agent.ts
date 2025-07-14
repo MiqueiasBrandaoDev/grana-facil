@@ -1567,8 +1567,7 @@ EXEMPLOS DE AÇÕES CLARAS:
       'gasolina': '⛽',
       'telefone': '📱',
       'internet': '📶',
-      'supermercado': '🛒',
-      'farmácia': '💊'
+      'supermercado': '🛒'
     };
     
     const categoryLower = categoryName.toLowerCase();

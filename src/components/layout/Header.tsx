@@ -12,9 +12,10 @@ import { cn } from '@/lib/utils';
 interface HeaderProps {
   onToggleSidebar: () => void;
   sidebarCollapsed: boolean;
+  isMobile?: boolean;
 }
 
-const Header: React.FC<HeaderProps> = ({ onToggleSidebar, sidebarCollapsed }) => {
+const Header: React.FC<HeaderProps> = ({ onToggleSidebar, sidebarCollapsed, isMobile = false }) => {
   const { user } = useAuth();
 
   const handleLogout = async () => {
@@ -42,7 +43,10 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar, sidebarCollapsed }) =>
   };
 
   return (
-    <header className="h-16 bg-card border-b border-border flex items-center justify-between px-6 sticky top-0 z-40 backdrop-blur-md bg-card/80">
+    <header className={cn(
+      "h-16 bg-card border-b border-border flex items-center justify-between sticky top-0 z-40 backdrop-blur-md bg-card/80",
+      isMobile ? "px-4" : "px-6"
+    )}>
       {/* Left section */}
       <div className="flex items-center gap-4">
         <Button
@@ -54,21 +58,25 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar, sidebarCollapsed }) =>
           <Menu className="w-4 h-4" />
         </Button>
         
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            placeholder="Buscar transações, categorias..."
-            className="pl-10 w-80 bg-muted/50 border-none focus:bg-background transition-colors"
-          />
-        </div>
+        {!isMobile && (
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar transações, categorias..."
+              className="pl-10 w-80 bg-muted/50 border-none focus:bg-background transition-colors"
+            />
+          </div>
+        )}
       </div>
 
       {/* Right section */}
       <div className="flex items-center gap-3">
-        <Button variant="ghost" size="sm" className="p-2 hover:bg-accent relative">
-          <Bell className="w-4 h-4" />
-          <span className="absolute -top-1 -right-1 w-2 h-2 bg-destructive rounded-full animate-pulse" />
-        </Button>
+        {!isMobile && (
+          <Button variant="ghost" size="sm" className="p-2 hover:bg-accent relative">
+            <Bell className="w-4 h-4" />
+            <span className="absolute -top-1 -right-1 w-2 h-2 bg-destructive rounded-full animate-pulse" />
+          </Button>
+        )}
         
         <ThemeToggle />
         

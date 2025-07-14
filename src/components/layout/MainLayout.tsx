@@ -12,16 +12,35 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const toggleSidebar = () => setSidebarCollapsed(!sidebarCollapsed);
 
   return (
-    <div className="min-h-screen bg-background flex">
-      <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} />
+    <div className="min-h-screen bg-background flex relative">
+      {/* Mobile overlay */}
+      {isMobile && !sidebarCollapsed && (
+        <div 
+          className="fixed inset-0 bg-black/50 z-40" 
+          onClick={() => setSidebarCollapsed(true)}
+        />
+      )}
       
-      <div className="flex-1 flex flex-col min-w-0">
+      <Sidebar 
+        collapsed={sidebarCollapsed} 
+        onToggle={toggleSidebar} 
+        isMobile={isMobile}
+      />
+      
+      <div className={cn(
+        "flex-1 flex flex-col min-w-0 transition-all duration-300",
+        isMobile ? "w-full" : ""
+      )}>
         <Header 
           onToggleSidebar={toggleSidebar} 
-          sidebarCollapsed={sidebarCollapsed} 
+          sidebarCollapsed={sidebarCollapsed}
+          isMobile={isMobile}
         />
         
-        <main className="flex-1 p-6 overflow-auto">
+        <main className={cn(
+          "flex-1 overflow-auto transition-all duration-300",
+          isMobile ? "p-4" : "p-6"
+        )}>
           {children}
         </main>
       </div>
