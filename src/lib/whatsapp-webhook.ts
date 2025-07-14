@@ -325,7 +325,7 @@ export const createWhatsAppWebhookService = (): WhatsAppWebhookService => {
   const config: WhatsAppConfig = {
     accessToken: import.meta.env.VITE_WHATSAPP_ACCESS_TOKEN || '',
     phoneNumberId: import.meta.env.VITE_WHATSAPP_PHONE_NUMBER_ID || '',
-    verifyToken: import.meta.env.VITE_WHATSAPP_VERIFY_TOKEN || 'grana_facil_webhook_verify',
+    verifyToken: import.meta.env.VITE_WHATSAPP_VERIFY_TOKEN || 'granaboard_webhook_verify',
     webhookUrl: import.meta.env.VITE_WHATSAPP_WEBHOOK_URL || ''
   };
 
@@ -342,12 +342,12 @@ export const getWebhookSetupInstructions = (): string => {
 1️⃣ **Configurar variáveis de ambiente:**
    - VITE_WHATSAPP_ACCESS_TOKEN: Token de acesso do Meta Business
    - VITE_WHATSAPP_PHONE_NUMBER_ID: ID do número do WhatsApp Business
-   - VITE_WHATSAPP_VERIFY_TOKEN: Token de verificação (use: grana_facil_webhook_verify)
+   - VITE_WHATSAPP_VERIFY_TOKEN: Token de verificação (use: granaboard_webhook_verify)
    - VITE_WHATSAPP_WEBHOOK_URL: URL pública do seu webhook
 
 2️⃣ **Configurar webhook no Meta Developers:**
    - URL: https://seu-dominio.com/api/whatsapp/webhook
-   - Verify Token: grana_facil_webhook_verify
+   - Verify Token: granaboard_webhook_verify
    - Campos: messages, message_deliveries
 
 3️⃣ **Implementar endpoint no backend:**

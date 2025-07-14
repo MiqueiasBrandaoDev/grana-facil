@@ -16,7 +16,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Architecture
 
-This is a React TypeScript financial management application ("GranaFacil") built with:
+This is a React TypeScript financial management application ("Grana Board") built with:
 
 - **Frontend**: React 18 + TypeScript + Vite
 - **UI Library**: shadcn/ui components with Radix UI primitives

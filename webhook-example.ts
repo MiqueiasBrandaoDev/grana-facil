@@ -214,7 +214,7 @@ Adicione estas variáveis no seu .env:
 
 VITE_WHATSAPP_ACCESS_TOKEN=your_meta_business_access_token
 VITE_WHATSAPP_PHONE_NUMBER_ID=your_whatsapp_business_phone_number_id
-VITE_WHATSAPP_VERIFY_TOKEN=grana_facil_webhook_verify
+VITE_WHATSAPP_VERIFY_TOKEN=granaboard_webhook_verify
 VITE_WHATSAPP_WEBHOOK_URL=https://your-domain.com/api/whatsapp/webhook
 
 Para obter esses valores:

@@ -1,4 +1,4 @@
-# 💰 Grana Fácil
+# 💰 Grana Board
 
 **Controle Financeiro Inteligente com IA Integrada**
 
@@ -183,7 +183,7 @@ supabase/
 
 ## 📱 Funcionalidade WhatsApp
 
-O diferencial do **Grana Fácil** é o controle financeiro via WhatsApp:
+O diferencial do **Grana Board** é o controle financeiro via WhatsApp:
 
 - **Interface familiar** - Usa a interface que todos conhecem
 - **Comandos naturais** - "Gastei R$ 50 no mercado"

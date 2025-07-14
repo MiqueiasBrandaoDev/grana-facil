@@ -20,7 +20,7 @@ export const useTheme = () => {
   return context;
 };
 
-export const useThemeState = (defaultTheme: Theme = 'system', storageKey: string = 'granafacil-theme') => {
+export const useThemeState = (defaultTheme: Theme = 'system', storageKey: string = 'granaboard-theme') => {
   const [theme, setThemeState] = useState<Theme>(defaultTheme);
   const [actualTheme, setActualTheme] = useState<'dark' | 'light'>('light');
 

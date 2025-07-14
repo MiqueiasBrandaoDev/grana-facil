@@ -116,7 +116,7 @@ const Dashboard: React.FC = () => {
         <div className="text-center py-12 bg-gradient-to-r from-primary/5 to-accent/5 rounded-lg border border-primary/10">
           <DollarSign className="h-16 w-16 text-primary mx-auto mb-4" />
           <h2 className="text-2xl font-semibold text-foreground mb-2">
-            Bem-vindo ao GranaFacil!
+            Bem-vindo ao Grana Board!
           </h2>
           <p className="text-muted-foreground mb-6 max-w-md mx-auto">
             Comece adicionando suas transações financeiras para ter controle total das suas finanças.

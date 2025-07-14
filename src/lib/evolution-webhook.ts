@@ -292,7 +292,7 @@ export class EvolutionWebhookService {
    * 🎯 Apresentação do sistema para novos usuários
    */
   async sendSystemPresentation(to: string, userName?: string): Promise<boolean> {
-    const presentationText = `🎉 *Olá${userName ? ` ${userName}` : ''}! Bem-vindo à Grana Fácil!*
+    const presentationText = `🎉 *Olá${userName ? ` ${userName}` : ''}! Bem-vindo ao Grana Board!*
 
 🤖 Sou a *Grana IA*, seu assistente financeiro inteligente powered by GPT-4o.
 
@@ -550,7 +550,7 @@ export const createEvolutionWebhookService = (): EvolutionWebhookService => {
   const config: EvolutionConfig = {
     baseUrl: import.meta.env.VITE_EVOLUTION_API_URL || 'http://localhost:8080',
     apiKey: import.meta.env.VITE_EVOLUTION_API_KEY || '',
-    instanceName: import.meta.env.VITE_EVOLUTION_INSTANCE_NAME || 'granafacil',
+    instanceName: import.meta.env.VITE_EVOLUTION_INSTANCE_NAME || 'granaboard',
     webhookUrl: import.meta.env.VITE_EVOLUTION_WEBHOOK_URL || ''
   };
 

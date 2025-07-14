@@ -16,7 +16,7 @@ function getWebhookService(): EvolutionWebhookService {
     const config = {
       baseUrl: import.meta.env.VITE_EVOLUTION_API_URL || 'http://localhost:8080',
       apiKey: import.meta.env.VITE_EVOLUTION_API_KEY || '',
-      instanceName: import.meta.env.VITE_EVOLUTION_INSTANCE_NAME || 'granafacil',
+      instanceName: import.meta.env.VITE_EVOLUTION_INSTANCE_NAME || 'granaboard',
       webhookUrl: import.meta.env.VITE_EVOLUTION_WEBHOOK_URL || ''
     };
     
@@ -65,7 +65,7 @@ export function getWebhookStatus(): object {
     timestamp: new Date().toISOString(),
     environment: {
       apiUrl: import.meta.env.VITE_EVOLUTION_API_URL || 'não configurado',
-      instanceName: import.meta.env.VITE_EVOLUTION_INSTANCE_NAME || 'granafacil',
+      instanceName: import.meta.env.VITE_EVOLUTION_INSTANCE_NAME || 'granaboard',
       webhookUrl: import.meta.env.VITE_EVOLUTION_WEBHOOK_URL || 'não configurado'
     },
     endpoints: {

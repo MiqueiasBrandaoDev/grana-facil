@@ -75,7 +75,7 @@ const WebhookTest: React.FC = () => {
   const getExamplePayload = () => {
     return JSON.stringify({
       event: "messages.upsert",
-      instance: "granafacil",
+      instance: "granaboard",
       data: {
         key: {
           remoteJid: "5511999999999@s.whatsapp.net",

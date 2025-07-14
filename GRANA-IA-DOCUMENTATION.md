@@ -138,7 +138,7 @@ VITE_SUPABASE_ANON_KEY=your-supabase-anon-key
 # WhatsApp (opcional)
 VITE_WHATSAPP_ACCESS_TOKEN=your-meta-business-token
 VITE_WHATSAPP_PHONE_NUMBER_ID=your-phone-number-id
-VITE_WHATSAPP_VERIFY_TOKEN=grana_facil_webhook_verify
+VITE_WHATSAPP_VERIFY_TOKEN=granaboard_webhook_verify
 VITE_WHATSAPP_WEBHOOK_URL=https://your-domain.com/api/whatsapp/webhook
 ```
 
@@ -179,7 +179,7 @@ console.log(response.confidence); // Nível de confiança
 3. Adicione "WhatsApp Business API"
 4. Configure:
    - **Webhook URL**: `https://seu-dominio.com/api/whatsapp/webhook`
-   - **Verify Token**: `grana_facil_webhook_verify`
+   - **Verify Token**: `granaboard_webhook_verify`
    - **Webhook Fields**: `messages`
 
 #### Implementação do Endpoint
@@ -350,9 +350,9 @@ npm run preview  # Testar build local
 - Wiki colaborativa
 
 ### **Contato**
-- 📧 Email: suporte@granafacil.com
+- 📧 Email: suporte@granaboard.com
 - 💬 WhatsApp: +55 11 99999-9999
-- 🌐 Site: https://granafacil.com
+- 🌐 Site: https://granaboard.com
 
 ---
 

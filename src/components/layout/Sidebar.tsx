@@ -92,7 +92,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, isMobile = false
           </div>
           {!collapsed && (
             <div>
-              <h1 className="text-lg font-semibold text-sidebar-foreground">Grana Fácil</h1>
+              <h1 className="text-lg font-semibold text-sidebar-foreground">Grana Board</h1>
               <p className="text-xs text-sidebar-foreground/60">Controle Financeiro</p>
             </div>
           )}

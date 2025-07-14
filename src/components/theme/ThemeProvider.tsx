@@ -12,7 +12,7 @@ interface ThemeProviderProps {
 export const ThemeProvider: React.FC<ThemeProviderProps> = ({ 
   children, 
   defaultTheme = 'system', 
-  storageKey = 'granafacil-theme' 
+  storageKey = 'granaboard-theme' 
 }) => {
   const themeState = useThemeState(defaultTheme, storageKey);
 

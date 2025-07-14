@@ -246,7 +246,7 @@ async function sendMessage(to, text) {
  * 🎯 Apresentação do sistema
  */
 async function sendSystemPresentation(to, userName) {
-  const presentationText = `🎉 *Olá${userName ? ` ${userName}` : ''}! Bem-vindo à Grana Fácil!*
+  const presentationText = `🎉 *Olá${userName ? ` ${userName}` : ''}! Bem-vindo ao Grana Board!*
 
 🤖 Sou a *Grana IA*, seu assistente financeiro inteligente powered by GPT-4o.
 

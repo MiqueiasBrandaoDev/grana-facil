@@ -27,7 +27,7 @@ if (typeof window !== 'undefined') {
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <ThemeProvider defaultTheme="system" storageKey="granafacil-theme">
+    <ThemeProvider defaultTheme="system" storageKey="granaboard-theme">
       <TooltipProvider>
         <Toaster />
         <Sonner />

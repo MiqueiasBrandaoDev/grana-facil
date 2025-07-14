@@ -259,7 +259,7 @@ async function sendMessage(to: string, text: string): Promise<boolean> {
 }
 
 async function sendSystemPresentation(to: string, userName?: string): Promise<void> {
-  const presentationText = `🎉 *Olá${userName ? ` ${userName}` : ''}! Bem-vindo à Grana Fácil!*
+  const presentationText = `🎉 *Olá${userName ? ` ${userName}` : ''}! Bem-vindo ao Grana Board!*
 
 🤖 Sou a *Grana IA*, seu assistente financeiro inteligente powered by GPT-4o.
 
