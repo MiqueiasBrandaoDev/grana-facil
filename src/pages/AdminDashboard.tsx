@@ -206,7 +206,7 @@ const AdminDashboard: React.FC = () => {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <LogIn className="h-5 w-5" />
-              Login Administrativo
+              Login Administrativooooo
             </CardTitle>
             <CardDescription>
               Faça login para acessar o painel administrativo
