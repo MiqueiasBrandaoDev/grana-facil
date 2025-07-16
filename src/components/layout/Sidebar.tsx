@@ -10,9 +10,11 @@ import {
   Settings,
   Wallet,
   TrendingUp,
-  Calendar
+  Calendar,
+  Shield
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useAdminAuth } from '@/hooks/useAdminAuth';
 
 const sidebarItems = [
   {
@@ -74,6 +76,7 @@ interface SidebarProps {
 
 const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, isMobile = false }) => {
   const location = useLocation();
+  const { isAdmin } = useAdminAuth();
 
   return (
     <div className={cn(
@@ -190,6 +193,54 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, isMobile = false
             );
           })()}
         </div>
+        
+        {/* Admin Panel - Only visible to admin users */}
+        {isAdmin && (
+          <div className="mt-4 pt-4 border-t border-sidebar-border/50">
+            {(() => {
+              const isActive = location.pathname === '/admin';
+              const Icon = Shield;
+              
+              return (
+                <NavLink
+                  to="/admin"
+                  className={cn(
+                    "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 group relative",
+                    "bg-gradient-to-r from-orange-500/20 to-red-600/20 border border-orange-500/30",
+                    "hover:from-orange-500/30 hover:to-red-600/30 hover:border-orange-500/40",
+                    isActive 
+                      ? "bg-gradient-to-r from-orange-500/40 to-red-600/40 border-orange-500/50 shadow-lg shadow-orange-500/20" 
+                      : ""
+                  )}
+                  title={collapsed ? 'Painel Admin' : undefined}
+                >
+                  <Icon className={cn(
+                    "shrink-0 transition-colors text-orange-600 dark:text-orange-400",
+                    collapsed ? "w-5 h-5" : "w-4 h-4"
+                  )} />
+                  
+                  {!collapsed && (
+                    <div className="flex-1 min-w-0">
+                      <div className={cn(
+                        "font-medium text-sm truncate text-orange-700 dark:text-orange-300",
+                        isActive ? "text-orange-800 dark:text-orange-200" : ""
+                      )}>
+                        Painel Admin
+                      </div>
+                      <div className="text-xs text-orange-600/70 dark:text-orange-400/70 truncate">
+                        Administração do sistema
+                      </div>
+                    </div>
+                  )}
+                  
+                  {isActive && (
+                    <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-orange-500 rounded-r-full" />
+                  )}
+                </NavLink>
+              );
+            })()}
+          </div>
+        )}
       </nav>
 
     </div>

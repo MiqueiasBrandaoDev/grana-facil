@@ -108,10 +108,28 @@ export const useCategories = () => {
         throw new Error('Usuário não autenticado');
       }
 
+      // Verificar se o usuário já tem categorias
+      const { data: existingCategories } = await supabase
+        .from('categories')
+        .select('id')
+        .eq('user_id', user.id)
+        .limit(1);
+
+      // Se já tem categorias, não criar as padrão
+      if (existingCategories && existingCategories.length > 0) {
+        console.log('✅ Usuário já possui categorias, pulando criação das padrão');
+        return;
+      }
+
       const { error } = await supabase
         .rpc('create_default_categories', { user_id: user.id });
 
       if (error) {
+        // Se for erro de duplicata, ignorar silenciosamente
+        if (error.code === '23505') {
+          console.log('✅ Categorias padrão já existem, ignorando erro');
+          return;
+        }
         console.error('Erro detalhado do Supabase:', error);
         throw new Error(`Erro ao criar categorias padrão: ${error.message}`);
       }

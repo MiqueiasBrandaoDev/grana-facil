@@ -16,6 +16,7 @@ import Bills from "./pages/Bills";
 import Settings from "./pages/Settings";
 import WebhookTest from "./pages/WebhookTest";
 import WebhookDebug from "./pages/WebhookDebug";
+import AdminDashboard from "./pages/AdminDashboard";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -45,6 +46,7 @@ const App = () => (
                 <Route path="/settings" element={<Settings />} />
                 <Route path="/webhook-test" element={<WebhookTest />} />
                 <Route path="/webhook-debug" element={<WebhookDebug />} />
+                <Route path="/admin" element={<AdminDashboard />} />
                 {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                 <Route path="*" element={<NotFound />} />
               </Routes>

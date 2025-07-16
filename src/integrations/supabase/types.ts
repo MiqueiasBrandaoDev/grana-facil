@@ -280,6 +280,111 @@ export type Database = {
           created_at?: string
         }
       }
+      admin_users: {
+        Row: {
+          id: string
+          email: string
+          name: string
+          role: 'super_admin' | 'admin'
+          is_active: boolean
+          created_at: string
+          created_by: string | null
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          email: string
+          name: string
+          role?: 'super_admin' | 'admin'
+          is_active?: boolean
+          created_at?: string
+          created_by?: string | null
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          email?: string
+          name?: string
+          role?: 'super_admin' | 'admin'
+          is_active?: boolean
+          created_at?: string
+          created_by?: string | null
+          updated_at?: string
+        }
+      }
+      admin_logs: {
+        Row: {
+          id: string
+          admin_id: string
+          admin_email: string
+          action: string
+          description: string | null
+          ip_address: string | null
+          user_agent: string | null
+          metadata: Json
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          admin_id: string
+          admin_email: string
+          action: string
+          description?: string | null
+          ip_address?: string | null
+          user_agent?: string | null
+          metadata?: Json
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          admin_id?: string
+          admin_email?: string
+          action?: string
+          description?: string | null
+          ip_address?: string | null
+          user_agent?: string | null
+          metadata?: Json
+          created_at?: string
+        }
+      }
+      deploy_history: {
+        Row: {
+          id: string
+          admin_id: string
+          admin_email: string
+          status: 'running' | 'success' | 'failed'
+          commit_hash: string | null
+          branch: string
+          logs: string | null
+          started_at: string
+          completed_at: string | null
+          duration_seconds: number | null
+        }
+        Insert: {
+          id?: string
+          admin_id: string
+          admin_email: string
+          status?: 'running' | 'success' | 'failed'
+          commit_hash?: string | null
+          branch?: string
+          logs?: string | null
+          started_at?: string
+          completed_at?: string | null
+          duration_seconds?: number | null
+        }
+        Update: {
+          id?: string
+          admin_id?: string
+          admin_email?: string
+          status?: 'running' | 'success' | 'failed'
+          commit_hash?: string | null
+          branch?: string
+          logs?: string | null
+          started_at?: string
+          completed_at?: string | null
+          duration_seconds?: number | null
+        }
+      }
     }
     Views: {
       monthly_summary: {

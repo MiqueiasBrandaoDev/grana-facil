@@ -103,7 +103,7 @@ const Categories: React.FC = () => {
 
   // Criar categorias automaticamente se o usuário tiver poucas
   useEffect(() => {
-    if (!loading && categories.length > 0 && categories.length < 10) {
+    if (!loading && categories.length === 0) {
       console.log('🏷️ Criando categorias padrão automaticamente...');
       createDefaultCategories().catch(console.error);
     }
