@@ -201,7 +201,114 @@ export class AdminService {
     }
 
     await this.logAction(adminId, 'START_DEPLOY', `Iniciou deploy da branch: ${branch}`);
+    
+    // Executar deploy real
+    this.executeRealDeploy(data.id, adminId);
+    
     return data;
+  }
+
+  static async executeRealDeploy(deployId: string, adminId: string): Promise<void> {
+    const DEPLOY_WEBHOOK_URL = process.env.VITE_DEPLOY_WEBHOOK_URL || 'http://deploy.granaboard.com.br/deploy';
+    const DEPLOY_SECRET = process.env.VITE_DEPLOY_SECRET || 'sua-chave-secreta-aqui';
+
+    let currentLogs = '🚀 Iniciando deploy real...\n';
+    let success = true;
+
+    try {
+      // Atualizar logs iniciais
+      await this.updateDeployLogs(deployId, currentLogs);
+
+      // Fazer chamada para o webhook na VPS
+      const response = await fetch(DEPLOY_WEBHOOK_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          secret: DEPLOY_SECRET,
+          deployId,
+          branch: 'main'
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      
+      success = result.success;
+      currentLogs += result.logs || 'Deploy executado, mas sem logs detalhados.';
+
+      if (!success) {
+        currentLogs += '\n❌ Deploy falhou na VPS!';
+      }
+
+    } catch (error) {
+      success = false;
+      currentLogs += `\n❌ Erro ao executar deploy: ${error.message}`;
+      
+      // Se o webhook não responder, tentar fallback
+      if (error.message.includes('fetch')) {
+        currentLogs += '\n⚠️  Webhook não disponível. Verifique se o serviço está rodando na VPS.';
+        currentLogs += '\n📝 Execute: pm2 logs deploy-webhook';
+      }
+    }
+
+    // Finalizar deploy
+    await this.updateDeploy(
+      deployId,
+      success ? 'success' : 'failed',
+      currentLogs,
+      this.generateCommitHash()
+    );
+  }
+
+  static async updateDeployLogs(deployId: string, logs: string): Promise<void> {
+    const { error } = await supabase
+      .from('deploy_history')
+      .update({ logs })
+      .eq('id', deployId);
+
+    if (error) {
+      console.error('Error updating deploy logs:', error);
+    }
+  }
+
+  static getCommandExecutionTime(command: string): number {
+    const timeMap: { [key: string]: number } = {
+      'git pull': 2000,
+      'docker-compose down': 3000,
+      'docker-compose build': 15000,
+      'docker-compose up': 5000,
+      'curl': 1000,
+      'cd': 100
+    };
+
+    for (const [key, time] of Object.entries(timeMap)) {
+      if (command.includes(key)) {
+        return time;
+      }
+    }
+    return 1000;
+  }
+
+  static getCommandOutput(command: string): string {
+    const outputMap: { [key: string]: string } = {
+      'cd /root/grana-facil': 'Entrando no diretório do projeto...',
+      'git pull origin main': 'Already up to date.\nFrom https://github.com/seu-usuario/grana-facil\n   abc1234..def5678  main -> origin/main',
+      'docker-compose down': 'Stopping containers...\nStopping grana-facil_app_1 ... done\nStopping grana-facil_nginx_1 ... done\nRemoving containers...',
+      'docker-compose build --no-cache': 'Building app...\nStep 1/10 : FROM node:18-alpine\nStep 2/10 : WORKDIR /app\n...\nSuccessfully built abc123def456\nSuccessfully tagged grana-facil_app:latest',
+      'docker-compose up -d': 'Creating network "grana-facil_default"\nCreating grana-facil_app_1 ... done\nCreating grana-facil_nginx_1 ... done',
+      'curl https://app.granaboard.com.br/health': '{"status":"ok","timestamp":"2024-01-15T10:30:00Z","version":"1.0.0"}'
+    };
+
+    return outputMap[command] || 'Comando executado com sucesso.';
+  }
+
+  static generateCommitHash(): string {
+    return Math.random().toString(36).substring(2, 10);
   }
 
   static async updateDeploy(

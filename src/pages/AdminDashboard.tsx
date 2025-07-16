@@ -41,6 +41,9 @@ const AdminDashboard: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [selectedDeployLogs, setSelectedDeployLogs] = useState<string | null>(null);
+  const [isViewingLogs, setIsViewingLogs] = useState(false);
+  const [currentLogs, setCurrentLogs] = useState('');
 
   useEffect(() => {
     if (!loading) {
@@ -155,18 +158,48 @@ const AdminDashboard: React.FC = () => {
       
       if (deploy) {
         toast.success('Deploy iniciado com sucesso');
-        setTimeout(async () => {
-          await AdminService.updateDeploy(deploy.id, 'success', 'Deploy simulado concluído');
-          setIsDeploying(false);
+        
+        // Atualizar dados a cada 2 segundos durante o deploy
+        const interval = setInterval(async () => {
           await loadDashboardData();
-          toast.success('Deploy concluído com sucesso');
-        }, 5000);
+        }, 2000);
+        
+        // Parar o intervalo após 30 segundos (tempo máximo estimado do deploy)
+        setTimeout(() => {
+          clearInterval(interval);
+          setIsDeploying(false);
+        }, 30000);
       }
     } catch (error) {
       setIsDeploying(false);
       const errorMessage = error instanceof Error ? error.message : 'Erro ao iniciar deploy';
       toast.error(errorMessage);
     }
+  };
+
+  const handleViewLogs = async (deployId: string) => {
+    setIsViewingLogs(true);
+    setSelectedDeployLogs(deployId);
+    
+    try {
+      const { data, error } = await supabase
+        .from('deploy_history')
+        .select('logs')
+        .eq('id', deployId)
+        .single();
+      
+      if (error) throw error;
+      setCurrentLogs(data?.logs || 'Nenhum log disponível');
+    } catch (error) {
+      console.error('Erro ao carregar logs:', error);
+      setCurrentLogs('Erro ao carregar logs');
+    }
+  };
+
+  const handleCloseLogs = () => {
+    setIsViewingLogs(false);
+    setSelectedDeployLogs(null);
+    setCurrentLogs('');
   };
 
   const formatDate = (dateString: string) => {
@@ -513,8 +546,19 @@ const AdminDashboard: React.FC = () => {
                         </p>
                       )}
                     </div>
-                    <div className="text-xs text-muted-foreground">
-                      {formatDate(deploy.started_at)}
+                    <div className="flex items-center gap-2">
+                      <Button
+                        onClick={() => handleViewLogs(deploy.id)}
+                        variant="outline"
+                        size="sm"
+                        className="flex items-center gap-1"
+                      >
+                        <Eye className="h-3 w-3" />
+                        Logs
+                      </Button>
+                      <div className="text-xs text-muted-foreground">
+                        {formatDate(deploy.started_at)}
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -523,6 +567,39 @@ const AdminDashboard: React.FC = () => {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Modal de Logs */}
+      {isViewingLogs && (
+        <Dialog open={isViewingLogs} onOpenChange={handleCloseLogs}>
+          <DialogContent className="max-w-4xl max-h-[80vh]">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Activity className="h-5 w-5" />
+                Logs de Deploy
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="bg-black text-green-400 p-4 rounded-lg font-mono text-sm max-h-96 overflow-y-auto">
+                <pre className="whitespace-pre-wrap">{currentLogs}</pre>
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button 
+                  onClick={handleCloseLogs}
+                  variant="outline"
+                >
+                  Fechar
+                </Button>
+                <Button 
+                  onClick={() => handleViewLogs(selectedDeployLogs!)}
+                  variant="default"
+                >
+                  Atualizar
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 };
