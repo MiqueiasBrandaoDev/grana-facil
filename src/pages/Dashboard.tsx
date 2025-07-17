@@ -20,6 +20,7 @@ import { useTransactions } from '@/hooks/useTransactions';
 import { useBills } from '@/hooks/useBills';
 import { useGoals } from '@/hooks/useGoals';
 import { useActivityLog } from '@/hooks/useActivityLog';
+import { useTotalCardSpending } from '@/hooks/useCards';
 
 const Dashboard: React.FC = () => {
   // Modal states
@@ -60,6 +61,8 @@ const Dashboard: React.FC = () => {
     formatCurrency: formatActivityCurrency,
     formatTimestamp
   } = useActivityLog();
+
+  const { data: totalCardSpending = 0 } = useTotalCardSpending();
 
   const monthlyBalance = monthlyNet;
   const balanceType = monthlyBalance > 0 ? 'positive' : monthlyBalance < 0 ? 'negative' : 'neutral';
@@ -183,7 +186,7 @@ const Dashboard: React.FC = () => {
       </div>
 
       {/* Secondary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 lg:gap-6">
         <FinancialCard
           title="Contas Pendentes"
           value={`${billsSummary.pendingBills} contas`}
@@ -194,6 +197,15 @@ const Dashboard: React.FC = () => {
             "border-red-200 bg-red-50 dark:bg-red-950/20 dark:border-red-800" : 
             "border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800"
           }
+        />
+        
+        <FinancialCard
+          title="Gastos Cartão"
+          value={formatCurrency(totalCardSpending)}
+          change={totalCardSpending > 0 ? "Fatura pendente" : "Nenhum gasto"}
+          changeType={totalCardSpending > 0 ? "negative" : "neutral"}
+          icon={CreditCard}
+          className="border-purple-200 bg-purple-50 dark:bg-purple-950/20 dark:border-purple-800"
         />
         
         <FinancialCard

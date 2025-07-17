@@ -13,6 +13,7 @@ import Categories from "./pages/Categories";
 import Reports from "./pages/Reports";
 import Goals from "./pages/Goals";
 import Bills from "./pages/Bills";
+import Cards from "./pages/Cards";
 import Settings from "./pages/Settings";
 import WebhookTest from "./pages/WebhookTest";
 import WebhookDebug from "./pages/WebhookDebug";
@@ -43,6 +44,7 @@ const App = () => (
                 <Route path="/reports" element={<Reports />} />
                 <Route path="/goals" element={<Goals />} />
                 <Route path="/bills" element={<Bills />} />
+                <Route path="/cards" element={<Cards />} />
                 <Route path="/settings" element={<Settings />} />
                 <Route path="/webhook-test" element={<WebhookTest />} />
                 <Route path="/webhook-debug" element={<WebhookDebug />} />

@@ -48,6 +48,12 @@ const sidebarItems = [
     description: 'A pagar e receber'
   },
   {
+    name: 'Cartões',
+    href: '/cards',
+    icon: CreditCard,
+    description: 'Cartões de crédito'
+  },
+  {
     name: 'Relatórios',
     href: '/reports',
     icon: BarChart3,

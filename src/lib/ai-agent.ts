@@ -19,7 +19,7 @@ export interface AIAgentResponse {
 }
 
 export interface AIAction {
-  type: 'create_transaction' | 'create_category' | 'create_goal' | 'update_goal' | 'create_bill' | 'update_bill' | 'delete_bill' | 'update_budget' | 'pay_bill' | 'list_bills' | 'investment_suggestion' | 'financial_advice';
+  type: 'create_transaction' | 'create_category' | 'create_goal' | 'update_goal' | 'create_bill' | 'update_bill' | 'delete_bill' | 'update_budget' | 'pay_bill' | 'list_bills' | 'investment_suggestion' | 'financial_advice' | 'create_card' | 'create_card_purchase' | 'pay_card_invoice' | 'list_cards' | 'view_card_history';
   data: any;
   priority: 'high' | 'medium' | 'low';
   executed: boolean;
@@ -34,6 +34,7 @@ export interface UserContext {
   recentTransactions: any[];
   goals: any[];
   bills: any[];
+  cards: any[];
 }
 
 /**
@@ -98,8 +99,10 @@ export class AIFinancialAgent {
       const analysis = await this.analyzeIntent(message);
       console.log('📋 Análise completa:', analysis);
       
-      // 3.1. FORÇAR list_bills para consultas de contas
+      // 3.0. VERIFICAR FALLBACKS PRIMEIRO (antes de verificar esclarecimento)
       const messageNormalized = message.toLowerCase().trim();
+      
+      // 3.1. FORÇAR list_bills para consultas de contas
       const isContasQuery = 
         messageNormalized.includes('quais contas') ||
         messageNormalized.includes('que contas') ||
@@ -119,8 +122,259 @@ export class AIFinancialAgent {
         analysis.intent = 'bill';
       }
       
-      // 4. Verificar se precisa de esclarecimento
-      if (analysis.needsClarification) {
+      // 3.2. FORÇAR list_cards para consultas de cartões
+      const hasCartao = messageNormalized.includes('cartão') || messageNormalized.includes('cartoes') || messageNormalized.includes('cartões');
+      const hasQueryWord = messageNormalized.includes('quais') || messageNormalized.includes('que') || messageNormalized.includes('meus') || messageNormalized.includes('tenho') || messageNormalized.includes('lista');
+      
+      const isCartoesQuery = hasCartao && hasQueryWord;
+        
+      if (isCartoesQuery && (!analysis.actions || analysis.actions.length === 0)) {
+        console.log('🔧 FORÇANDO list_cards para consulta de cartões');
+        console.log('🔧 Mensagem detectada como consulta de cartões:', messageNormalized);
+        analysis.actions = [{
+          type: 'list_cards',
+          data: {},
+          priority: 'high'
+        }];
+        analysis.intent = 'card';
+        analysis.response_message = "Listando seus cartões de crédito...";
+      }
+      
+      // 3.3. FORÇAR create_card para criação de cartões
+      const hasCreateCartao = (messageNormalized.includes('criar') || messageNormalized.includes('novo') || messageNormalized.includes('cadastrar')) && hasCartao;
+      
+      if (hasCreateCartao && (!analysis.actions || analysis.actions.length === 0)) {
+        console.log('🔧 FORÇANDO create_card para criação de cartão');
+        console.log('🔧 Mensagem detectada como criação de cartão:', messageNormalized);
+        
+        // Extrair informações básicas de forma mais inteligente
+        // 1. Buscar nickname (palavra próxima a "cartão" que não seja comando)
+        let nickname = 'Cartão';
+        const cartaoWords = messageNormalized.split(/\s+/);
+        const cartaoIndex = cartaoWords.findIndex(word => word.includes('cartão') || word.includes('cartao'));
+        
+        if (cartaoIndex !== -1) {
+          // Procurar uma palavra antes ou depois de "cartão"
+          for (let i = cartaoIndex - 1; i <= cartaoIndex + 1; i++) {
+            if (i >= 0 && i < cartaoWords.length && i !== cartaoIndex) {
+              const word = cartaoWords[i].replace(/[,\.;]/g, ''); // Remove pontuação
+              if (word && !['criar', 'novo', 'cartão', 'cartao', 'limite', 'dia', 'de', 'com', 'vence'].includes(word) && !/\d/.test(word)) {
+                nickname = word;
+                break;
+              }
+            }
+          }
+        }
+        
+        // 2. Buscar limite (número seguido de "mil", "k" ou no contexto de "limite")
+        let limitAmount = null;
+        const limitMatch = messageNormalized.match(/(\d+)\s*(?:mil|k)/i) || messageNormalized.match(/limite\s+(?:de\s+)?(\d+(?:\.\d+)?)/i);
+        if (limitMatch) {
+          let limitValue = parseFloat(limitMatch[1]);
+          if (messageNormalized.includes('mil') || messageNormalized.includes('k')) {
+            limitAmount = limitValue * 1000;
+          } else {
+            limitAmount = limitValue;
+          }
+        }
+        
+        // 3. Buscar dia de vencimento (número isolado que não seja do limite)
+        let dueDay = null;
+        const dayMatch = messageNormalized.match(/(?:dia\s+|vence\s+(?:dia\s+)?)(\d{1,2})(?!\s*mil)/i);
+        if (dayMatch) {
+          const day = parseInt(dayMatch[1]);
+          // Só aceitar se for um dia válido e não parte do limite
+          if (day >= 1 && day <= 31 && !limitMatch?.[0]?.includes(dayMatch[1])) {
+            dueDay = day;
+          }
+        }
+        
+        console.log('🔧 Dados extraídos:', { nickname, limitAmount, dueDay, limitMatch, dayMatch });
+        
+        // Se tem todas as informações, criar diretamente
+        if (nickname && dueDay && dueDay >= 1 && dueDay <= 31) {
+          analysis.actions = [{
+            type: 'create_card',
+            data: {},
+            priority: 'high'
+          }];
+          analysis.extracted_data = {
+            ...analysis.extracted_data,
+            nickname: nickname,
+            due_day: dueDay,
+            limit_amount: limitAmount
+          };
+          analysis.intent = 'card';
+          analysis.needsClarification = false;
+        } else {
+          // Precisa de mais informações - só perguntar o que realmente falta
+          if (!dueDay) {
+            analysis.needsClarification = true;
+            analysis.clarificationQuestion = `💳 Para criar o cartão ${nickname}, qual o dia de vencimento? (1-31)${limitAmount ? `\n💰 Limite será: R$ ${limitAmount.toFixed(2)}` : ''}`;
+          } else {
+            // Se tem nickname e dia, pode criar mesmo sem limite
+            analysis.actions = [{
+              type: 'create_card',
+              data: {},
+              priority: 'high'
+            }];
+            analysis.extracted_data = {
+              ...analysis.extracted_data,
+              nickname: nickname,
+              due_day: dueDay,
+              limit_amount: limitAmount
+            };
+            analysis.intent = 'card';
+            analysis.needsClarification = false;
+          }
+        }
+      }
+      
+      // Debug: Log final das ações
+      console.log('🔍 Ações finais após fallbacks:', analysis.actions);
+      
+      // 3.4. Detectar comandos de cartão sem especificação e forçar fallbacks
+      const isCardPurchaseQuery = 
+        (messageNormalized.includes('comprei') || messageNormalized.includes('compra') || messageNormalized.includes('gasto') || messageNormalized.includes('usei') || messageNormalized.includes('paguei')) &&
+        (messageNormalized.includes('cartão') || messageNormalized.includes('cartao') || messageNormalized.includes('credito'));
+        
+      const isCardPaymentQuery = 
+        (messageNormalized.includes('pagar') || messageNormalized.includes('quitar')) &&
+        (messageNormalized.includes('fatura') || messageNormalized.includes('cartão') || messageNormalized.includes('cartao'));
+        
+      // 3.5. Detectar comandos específicos de compra no cartão com nome
+      const specificCardPurchaseQuery = messageNormalized.match(/(?:comprei|compra|gasto|usei|paguei).*?(?:no\s+cartão|cartão|credito)/i);
+      
+      if (specificCardPurchaseQuery && (!analysis.actions || analysis.actions.length === 0)) {
+        console.log('🔧 Detectado compra específica no cartão:', specificCardPurchaseQuery[0]);
+        
+        // Extrair valor
+        const numberMatch = messageNormalized.match(/(\d+(?:,\d+)?(?:\.\d+)?)/);
+        const amount = numberMatch ? parseFloat(numberMatch[1].replace(',', '.')) : null;
+        
+        // Extrair nome do cartão se especificado
+        const cardNameMatch = messageNormalized.match(/(?:cartão|credito)\s+(\w+)/i) || messageNormalized.match(/(\w+)\s+cartão/i);
+        let cardName = null;
+        
+        if (cardNameMatch && cardNameMatch[1]) {
+          cardName = cardNameMatch[1];
+        } else if (this.userContext?.cards && this.userContext.cards.length > 0) {
+          cardName = this.userContext.cards[0].nickname;
+        }
+        
+        if (amount && amount > 0 && cardName) {
+          // Extrair descrição
+          let description = 'Compra no cartão';
+          const descMatch = messageNormalized.match(/(?:comprei|compra|gasto)\s+(?:\d+\s*)?(?:reais?\s+)?(?:de\s+|no\s+|para\s+)?(\w+(?:\s+\w+)*?)(?:\s+(?:no|com|cartão))/i);
+          if (descMatch && descMatch[1]) {
+            description = descMatch[1].trim();
+          }
+          
+          analysis.actions = [{
+            type: 'create_card_purchase',
+            data: {},
+            priority: 'high'
+          }];
+          analysis.extracted_data = {
+            ...analysis.extracted_data,
+            card_name: cardName,
+            amount: amount,
+            description: description
+          };
+          analysis.intent = 'card';
+          analysis.needsClarification = false;
+          
+          console.log('🔧 Dados específicos para criar compra:', analysis.extracted_data);
+        }
+      }
+        
+      // Detectar se é comando de cartão mas sem especificações suficientes
+      if ((isCardPurchaseQuery || isCardPaymentQuery) && (!analysis.actions || analysis.actions.length === 0)) {
+        console.log('🔧 Detectado comando de cartão genérico, aplicando fallback');
+        
+        if (isCardPurchaseQuery) {
+          console.log('🔧 Detectado compra no cartão');
+          console.log('🔧 UserContext cards:', this.userContext?.cards?.length || 0);
+          
+          // Extrair valor e descrição se possível
+          const numberMatch = messageNormalized.match(/(\d+(?:,\d+)?(?:\.\d+)?)/);
+          const amount = numberMatch ? parseFloat(numberMatch[1].replace(',', '.')) : null;
+          
+          console.log('🔧 Valor extraído:', amount);
+          
+          // Se há contexto de cartões, tentar usar o primeiro
+          if (this.userContext?.cards && this.userContext.cards.length > 0) {
+            if (amount && amount > 0) {
+              const cardName = this.userContext.cards[0].nickname;
+              console.log(`🔧 FALLBACK: Usando cartão "${cardName}" para compra de R$ ${amount}`);
+              
+              // Extrair descrição mais inteligente
+              let description = 'Compra no cartão';
+              if (messageNormalized.includes('combustivel') || messageNormalized.includes('gasolina') || messageNormalized.includes('etanol')) {
+                description = 'Combustível';
+              } else if (messageNormalized.includes('mercado') || messageNormalized.includes('supermercado')) {
+                description = 'Compras no mercado';
+              } else if (messageNormalized.includes('roupa') || messageNormalized.includes('vestuario')) {
+                description = 'Roupas';
+              } else if (messageNormalized.includes('comida') || messageNormalized.includes('alimentação') || messageNormalized.includes('alimento')) {
+                description = 'Alimentação';
+              } else if (messageNormalized.includes('farmacia') || messageNormalized.includes('remedio')) {
+                description = 'Farmácia';
+              } else {
+                // Tentar extrair descrição da mensagem
+                const descMatch = messageNormalized.match(/(?:comprei|compra|gasto)(?:\s+(?:r\$|\d+))?\s*(?:reais?)?\s*(?:de|no|para|com)?\s*(\w+(?:\s+\w+)*)/i);
+                if (descMatch && descMatch[1]) {
+                  description = descMatch[1].trim();
+                }
+              }
+              
+              analysis.actions = [{
+                type: 'create_card_purchase',
+                data: {},
+                priority: 'high'
+              }];
+              analysis.extracted_data = {
+                ...analysis.extracted_data,
+                card_name: cardName,
+                amount: amount,
+                description: description
+              };
+              analysis.intent = 'card';
+              analysis.needsClarification = false;
+              
+              console.log('🔧 Dados finais para criar compra:', analysis.extracted_data);
+            } else {
+              // Se não tem valor, pedir esclarecimento
+              analysis.needsClarification = true;
+              analysis.clarificationQuestion = "🛍️ Para registrar a compra no cartão, preciso saber:\n💰 Qual foi o valor?\n📝 O que você comprou?\n\nExemplo: 'comprei 50 reais de combustível no cartão'";
+            }
+          } else {
+            // Se não tem cartões, sugerir criar um primeiro
+            analysis.needsClarification = true;
+            analysis.clarificationQuestion = "💳 Você ainda não possui cartões cadastrados. Quer criar um cartão primeiro?\n\nExemplo: 'criar cartão Nubank dia 10'";
+          }
+        } else if (isCardPaymentQuery) {
+          // Para pagamento, sempre pode usar o primeiro cartão se houver
+          if (this.userContext?.cards && this.userContext.cards.length > 0) {
+            const cardName = this.userContext.cards[0].nickname;
+            console.log(`🔧 FALLBACK: Pagando fatura do cartão "${cardName}"`);
+            
+            analysis.actions = [{
+              type: 'pay_card_invoice',
+              data: {},
+              priority: 'high'
+            }];
+            analysis.extracted_data = {
+              ...analysis.extracted_data,
+              card_name: cardName
+            };
+            analysis.intent = 'card';
+          }
+        }
+      }
+      
+      // 4. Verificar se precisa de esclarecimento (MAS APÓS FALLBACKS!)
+      if (analysis.needsClarification && (!analysis.actions || analysis.actions.length === 0)) {
         return {
           success: false,
           message: analysis.clarificationQuestion || "🤔 Preciso de mais informações para te ajudar melhor.",
@@ -165,13 +419,15 @@ export class AIFinancialAgent {
       categoriesResult,
       transactionsResult,
       goalsResult,
-      billsResult
+      billsResult,
+      cardsResult
     ] = await Promise.all([
       supabase.rpc('get_user_balance', { input_user_id: user.id }),
       supabase.from('categories').select('*').eq('user_id', user.id),
       supabase.from('transactions_with_category').select('*').eq('user_id', user.id).order('created_at', { ascending: false }).limit(20),
       supabase.from('goal_progress').select('*').eq('user_id', user.id),
-      supabase.from('bills').select('*').eq('user_id', user.id).order('due_date', { ascending: true })
+      supabase.from('bills').select('*').eq('user_id', user.id).order('due_date', { ascending: true }),
+      supabase.from('card_spending_summary').select('*').eq('user_id', user.id).order('created_at', { ascending: false })
     ]);
 
     // Calcular receitas e despesas do mês
@@ -196,7 +452,8 @@ export class AIFinancialAgent {
       categories: categoriesResult.data || [],
       recentTransactions: transactionsResult.data || [],
       goals: goalsResult.data || [],
-      bills: billsResult.data || []
+      bills: billsResult.data || [],
+      cards: cardsResult.data || []
     };
   }
 
@@ -220,6 +477,7 @@ CAPACIDADES:
 - Analisar padrões de gastos
 - Dar conselhos financeiros personalizados
 - Gerenciar contas a pagar/receber
+- Gerenciar cartões de crédito e compras
 - Sugerir investimentos
 
 SEMPRE retorne um JSON válido com a estrutura exata especificada.`
@@ -260,6 +518,7 @@ CONTEXTO FINANCEIRO DO USUÁRIO:
 - Últimas transações: ${context.recentTransactions.slice(0, 5).map(t => `${t.description} - R$ ${Math.abs(t.amount)}`).join(', ')}
 - Metas ativas: ${context.goals.map(g => `${g.title} (${g.progress_percentage}%)`).join(', ')}
 - Contas pendentes: ${context.bills.map(b => `${b.title} - R$ ${b.amount}`).join(', ')}
+- Cartões de crédito: ${context.cards.map(c => `${c.nickname} (Pendente: R$ ${c.pending_amount || 0})`).join(', ')}
 
 HISTÓRICO DA CONVERSA (últimas 10 mensagens):
 ${historyText}
@@ -295,10 +554,17 @@ ESPECIAL - CONTAS SEM VALOR:
 Se o usuário quer criar uma conta mas NÃO especifica o valor, SEMPRE pedir esclarecimento.
 Exemplo: "Crie conta de Automações e IA, recebo todo dia 10" → Perguntar: "💰 Qual o valor que você recebe de Automações e IA todo dia 10?"
 
+ESPECIAL - CARTÕES SEM INFORMAÇÕES:
+Se o usuário quer criar um cartão mas NÃO especifica o dia de vencimento, SEMPRE pedir esclarecimento.
+Exemplo: "Criar cartão Nubank" → Perguntar: "💳 Qual o dia de vencimento do cartão Nubank? (1-31)"
+Se o usuário quer fazer uma compra no cartão mas NÃO especifica o valor ou descrição, SEMPRE pedir esclarecimento.
+Exemplo: "Comprei no cartão" → Perguntar: "🛍️ O que você comprou e qual foi o valor?"
+
 IMPORTANTE - CONSULTAS vs AÇÕES:
 - Perguntas como "quanto...", "como está..." → SEM ações, apenas response_message
 - Comandos como "criar...", "pagar...", "alterar..." → COM ações específicas
 - **EXCEÇÃO: "Quais contas", "Minhas contas", "Contas pendentes" → SEMPRE usar ação list_bills**
+- **EXCEÇÃO: "Quais cartões", "Meus cartões", "Cartões que tenho" → SEMPRE usar ação list_cards**
 
 IMPORTANTE - TIPOS DE AÇÃO:
 - "Gastei X reais", "Comprei X" → create_transaction (nova transação)
@@ -310,6 +576,11 @@ IMPORTANTE - TIPOS DE AÇÃO:
 - "Criar meta X" → create_goal
 - "Alterar meta", "Colocar X na meta" → update_goal
 - **"Quais contas", "Que contas tenho", "Contas pendentes", "Minhas contas" → list_bills (OBRIGATÓRIO)**
+- "Criar cartão X", "Novo cartão" → create_card
+- "Comprei X no cartão", "Usei cartão", "Gasto no cartão" → create_card_purchase
+- "Pagar fatura do cartão", "Quitar cartão" → pay_card_invoice
+- **"Quais cartões tenho", "Meus cartões", "Que cartões eu tenho", "Cartões que tenho" → list_cards (OBRIGATÓRIO)**
+- "Histórico do cartão", "Compras do cartão" → view_card_history
 
 IMPORTANTE - CAMPOS DE META:
 - target_amount = OBJETIVO da meta (quanto quero chegar)
@@ -342,7 +613,7 @@ REGRAS PARA CRIAÇÃO DE CATEGORIAS:
 
 RESPOSTA (JSON obrigatório):
 {
-  "intent": "transaction|goal|category|advice|report|bill|investment|clarification",
+  "intent": "transaction|goal|category|advice|report|bill|investment|card|clarification",
   "confidence": 0.95,
   "reasoning": "Explicação detalhada da análise",
   "needsClarification": false,
@@ -364,11 +635,17 @@ RESPOSTA (JSON obrigatório):
     "due_day": 10,
     "recurring": true,
     "recurring_interval": "monthly|weekly|daily|yearly",
-    "pay_all": "true (para pagar todas as contas)"
+    "pay_all": "true (para pagar todas as contas)",
+    "nickname": "Nome do cartão (OBRIGATÓRIO para create_card)",
+    "card_id": "ID do cartão específico",
+    "card_name": "Nome do cartão para busca",
+    "limit_amount": 5000.00,
+    "installments": 12,
+    "purchase_date": "2024-01-15"
   },
   "actions": [
     {
-      "type": "create_transaction|create_category|create_goal|update_goal|create_bill|update_bill|delete_bill|pay_bill|list_bills",
+      "type": "create_transaction|create_category|create_goal|update_goal|create_bill|update_bill|delete_bill|pay_bill|list_bills|create_card|create_card_purchase|pay_card_invoice|list_cards|view_card_history",
       "data": {},
       "priority": "high"
     }
@@ -391,6 +668,13 @@ EXEMPLOS DE ESCLARECIMENTO PARA CONTAS SEM VALOR:
 - "Crie conta recorrente, pagamentos de Automações e IA, recebo todo dia 10" → needsClarification: true, clarificationQuestion: "💰 Perfeito! Qual o **valor** que você recebe de 'Pagamentos de Automações e IA' todo dia 10? Por exemplo: R$ 500, R$ 1000, etc."
 
 - "Nova conta de luz que vence dia 15" → needsClarification: true, clarificationQuestion: "💡 Ótimo! Qual o **valor** da conta de luz? Por exemplo: R$ 200, R$ 150, etc."
+
+EXEMPLOS DE ESCLARECIMENTO PARA CARTÕES:
+- "Criar cartão Nubank" → needsClarification: true, clarificationQuestion: "💳 Perfeito! Qual o **dia de vencimento** do cartão Nubank? Por exemplo: 10, 15, 25, etc. (entre 1 e 31)"
+
+- "Novo cartão Inter com limite" → needsClarification: true, clarificationQuestion: "💳 Ótimo! Preciso de duas informações:\n1️⃣ **Dia de vencimento** (1-31)\n2️⃣ **Valor do limite** (opcional)\n\nExemplo: 'dia 15 com limite de 5000'"
+
+- "Comprei no cartão" → needsClarification: true, clarificationQuestion: "🛍️ Preciso de mais detalhes sobre a compra:\n1️⃣ **Qual cartão** você usou?\n2️⃣ **O que** você comprou?\n3️⃣ **Qual foi o valor**?\n\nExemplo: 'usei o Nubank para comprar roupas por 150 reais'"
 
 EXEMPLOS DE ESCLARECIMENTO PARA METAS AMBÍGUAS:
 - "Quero colocar 10000 na meta abrir empresa" → needsClarification: true, clarificationQuestion: "🎯 Você quer:\n\n💰 **Fazer um aporte** de R$ 10.000 (adicionar ao progresso atual)?\n\nOU\n\n🎯 **Alterar o objetivo** da meta para R$ 10.000 (mudar a meta total)?"
@@ -428,6 +712,17 @@ EXEMPLOS DE AÇÕES CLARAS:
 - **"Pode excluir a conta Recebimento mensal" → delete_bill com name: "Recebimento mensal"**
 - "Cadastrar conta de internet que pago todo mês" → create_bill
 - "Nova conta: aluguel de 1500 reais" → create_bill
+- "Criar cartão Nubank que vence dia 10" → create_card
+- "Comprei R$ 150 de roupa no cartão Nubank" → create_card_purchase
+- "Usei o cartão Inter para pagar 250 reais de combustível" → create_card_purchase
+- "Pagar fatura do cartão Nubank" → pay_card_invoice
+- "Quitar cartão Inter" → pay_card_invoice
+- **"Quais cartões tenho?" → OBRIGATORIAMENTE usar ação list_cards**
+- **"Meus cartões" → OBRIGATORIAMENTE usar ação list_cards**
+- **"Que cartões eu tenho?" → OBRIGATORIAMENTE usar ação list_cards**
+- **"Cartões que tenho" → OBRIGATORIAMENTE usar ação list_cards**
+- "Histórico do cartão Nubank" → view_card_history
+- "Compras do cartão Inter" → view_card_history
 `;
   }
 
@@ -511,6 +806,21 @@ EXEMPLOS DE AÇÕES CLARAS:
       
       case 'list_bills':
         return this.listBills(data);
+      
+      case 'create_card':
+        return this.createCard(data);
+      
+      case 'create_card_purchase':
+        return this.createCardPurchase(data);
+      
+      case 'pay_card_invoice':
+        return this.payCardInvoice(data);
+      
+      case 'list_cards':
+        return this.listCards(data);
+      
+      case 'view_card_history':
+        return this.viewCardHistory(data);
       
       case 'financial_advice':
         return this.generateAdvice(data);
@@ -1471,6 +1781,383 @@ EXEMPLOS DE AÇÕES CLARAS:
   private getRandomColor(): string {
     const colors = ['#3B82F6', '#EF4444', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899'];
     return colors[Math.floor(Math.random() * colors.length)];
+  }
+
+  /**
+   * 💳 Criar cartão de crédito
+   */
+  private async createCard(data: any): Promise<{success: boolean, message?: string}> {
+    try {
+      console.log('💳 createCard chamada com dados:', data);
+      
+      const context = this.userContext!;
+      
+      // Validar dados obrigatórios
+      if (!data.nickname) {
+        return {
+          success: false,
+          message: '❌ Nome do cartão é obrigatório.'
+        };
+      }
+      
+      if (!data.due_day || data.due_day < 1 || data.due_day > 31) {
+        return {
+          success: false,
+          message: '❌ Dia de vencimento deve estar entre 1 e 31.'
+        };
+      }
+      
+      const { data: card, error } = await supabase
+        .from('cards')
+        .insert({
+          user_id: context.userId,
+          nickname: data.nickname,
+          due_day: data.due_day,
+          limit_amount: data.limit_amount || null
+        })
+        .select()
+        .single();
+      
+      if (error) {
+        console.error('❌ Erro ao criar cartão:', error);
+        throw new Error(`Erro ao criar cartão: ${error.message}`);
+      }
+      
+      return {
+        success: true,
+        message: `💳 Cartão "${data.nickname}" criado com sucesso! Vencimento dia ${data.due_day}${data.limit_amount ? `, limite de R$ ${data.limit_amount.toFixed(2)}` : ''}.`
+      };
+      
+    } catch (error) {
+      console.error('❌ Erro ao criar cartão:', error);
+      return {
+        success: false,
+        message: `❌ Erro ao criar cartão: ${error instanceof Error ? error.message : 'Erro desconhecido'}`
+      };
+    }
+  }
+
+  /**
+   * 🛍️ Criar compra no cartão de crédito
+   */
+  private async createCardPurchase(data: any): Promise<{success: boolean, message?: string}> {
+    try {
+      console.log('🛍️ createCardPurchase chamada com dados:', data);
+      
+      const context = this.userContext!;
+      
+      // Validar dados obrigatórios
+      if (!data.card_id && !data.card_name) {
+        return {
+          success: false,
+          message: '❌ Cartão deve ser especificado.'
+        };
+      }
+      
+      if (!data.amount || data.amount <= 0) {
+        return {
+          success: false,
+          message: '❌ Valor da compra é obrigatório e deve ser maior que zero.'
+        };
+      }
+      
+      if (!data.description) {
+        return {
+          success: false,
+          message: '❌ Descrição da compra é obrigatória.'
+        };
+      }
+      
+      // Encontrar cartão
+      let cardId = data.card_id;
+      if (!cardId && data.card_name) {
+        const card = context.cards.find(c => 
+          c.nickname.toLowerCase().includes(data.card_name.toLowerCase())
+        );
+        if (!card) {
+          return {
+            success: false,
+            message: `❌ Cartão "${data.card_name}" não encontrado.`
+          };
+        }
+        cardId = card.id;
+      }
+      
+      // Encontrar categoria se especificada
+      let categoryId = null;
+      if (data.category) {
+        const category = context.categories.find(c => 
+          c.name.toLowerCase().includes(data.category.toLowerCase()) && c.type === 'expense'
+        );
+        categoryId = category?.id || null;
+      }
+      
+      const { data: purchase, error } = await supabase
+        .from('card_purchases')
+        .insert({
+          card_id: cardId,
+          description: data.description,
+          amount: data.amount,
+          category_id: categoryId,
+          purchase_date: data.purchase_date || new Date().toISOString().split('T')[0],
+          installments: data.installments || 1,
+          current_installment: 1
+        })
+        .select()
+        .single();
+      
+      if (error) {
+        console.error('❌ Erro ao criar compra no cartão:', error);
+        throw new Error(`Erro ao criar compra: ${error.message}`);
+      }
+      
+      const installmentText = data.installments > 1 ? ` em ${data.installments}x` : '';
+      return {
+        success: true,
+        message: `🛍️ Compra "${data.description}" de R$ ${data.amount.toFixed(2)}${installmentText} registrada no cartão!`
+      };
+      
+    } catch (error) {
+      console.error('❌ Erro ao criar compra no cartão:', error);
+      return {
+        success: false,
+        message: `❌ Erro ao criar compra: ${error instanceof Error ? error.message : 'Erro desconhecido'}`
+      };
+    }
+  }
+
+  /**
+   * 💸 Pagar fatura do cartão
+   */
+  private async payCardInvoice(data: any): Promise<{success: boolean, message?: string}> {
+    try {
+      console.log('💸 payCardInvoice chamada com dados:', data);
+      
+      const context = this.userContext!;
+      
+      // Encontrar cartão
+      let cardToPay = null;
+      
+      if (data.card_id) {
+        cardToPay = context.cards.find(c => c.id === data.card_id);
+      } else if (data.card_name) {
+        cardToPay = context.cards.find(c => 
+          c.nickname.toLowerCase().includes(data.card_name.toLowerCase())
+        );
+      } else if (context.cards.length === 1) {
+        cardToPay = context.cards[0];
+      }
+      
+      if (!cardToPay) {
+        return {
+          success: false,
+          message: '❌ Cartão não encontrado. Especifique o nome ou ID do cartão.'
+        };
+      }
+      
+      // Buscar compras não pagas do cartão
+      const { data: purchases, error: purchasesError } = await supabase
+        .from('card_purchases')
+        .select('*')
+        .eq('card_id', cardToPay.id)
+        .eq('is_paid', false);
+      
+      if (purchasesError) {
+        throw new Error(`Erro ao buscar compras: ${purchasesError.message}`);
+      }
+      
+      if (!purchases || purchases.length === 0) {
+        return {
+          success: false,
+          message: `💳 Cartão "${cardToPay.nickname}" não possui compras pendentes para pagamento.`
+        };
+      }
+      
+      const totalAmount = purchases.reduce((sum, p) => sum + p.amount, 0);
+      
+      // Criar transação de pagamento
+      const { data: transaction, error: transactionError } = await supabase
+        .from('transactions')
+        .insert({
+          user_id: context.userId,
+          amount: totalAmount,
+          description: `Pagamento fatura cartão ${cardToPay.nickname}`,
+          type: 'expense',
+          transaction_date: new Date().toISOString().split('T')[0]
+        })
+        .select()
+        .single();
+      
+      if (transactionError) {
+        throw new Error(`Erro ao criar transação: ${transactionError.message}`);
+      }
+      
+      // Marcar compras como pagas
+      const { error: updateError } = await supabase
+        .from('card_purchases')
+        .update({ 
+          is_paid: true,
+          transaction_id: transaction.id 
+        })
+        .eq('card_id', cardToPay.id)
+        .eq('is_paid', false);
+      
+      if (updateError) {
+        throw new Error(`Erro ao atualizar compras: ${updateError.message}`);
+      }
+      
+      return {
+        success: true,
+        message: `💸 Fatura do cartão "${cardToPay.nickname}" paga com sucesso!\n💰 Valor: R$ ${totalAmount.toFixed(2)}\n📊 ${purchases.length} compras quitadas`
+      };
+      
+    } catch (error) {
+      console.error('❌ Erro ao pagar fatura do cartão:', error);
+      return {
+        success: false,
+        message: `❌ Erro ao pagar fatura: ${error instanceof Error ? error.message : 'Erro desconhecido'}`
+      };
+    }
+  }
+
+  /**
+   * 💳 Listar cartões do usuário
+   */
+  private async listCards(data: any): Promise<{success: boolean, message?: string}> {
+    try {
+      console.log('💳 listCards chamada com dados:', data);
+      
+      const context = this.userContext!;
+      
+      if (context.cards.length === 0) {
+        return {
+          success: true,
+          message: '💳 Você ainda não possui cartões cadastrados.\n\n💡 Dica: "criar cartão Nubank dia 10" para adicionar um novo cartão.'
+        };
+      }
+      
+      let message = '💳 **SEUS CARTÕES DE CRÉDITO**\n\n';
+      
+      for (const card of context.cards) {
+        const pendingAmount = card.pending_amount || 0;
+        const statusIcon = pendingAmount > 0 ? '🔴' : '✅';
+        
+        message += `${statusIcon} **${card.nickname}**\n`;
+        message += `📅 Vencimento: dia ${card.due_day}\n`;
+        message += `💰 Fatura atual: R$ ${pendingAmount.toFixed(2)}\n`;
+        if (card.limit_amount) {
+          message += `💳 Limite: R$ ${card.limit_amount.toFixed(2)}\n`;
+        }
+        message += `🛍️ Compras pendentes: ${card.pending_purchases || 0}\n\n`;
+      }
+      
+      const totalPending = context.cards.reduce((sum, c) => sum + (c.pending_amount || 0), 0);
+      if (totalPending > 0) {
+        message += `💸 **TOTAL PENDENTE EM CARTÕES: R$ ${totalPending.toFixed(2)}**\n\n`;
+      }
+      
+      message += `💡 **Dicas:**\n• "compra no cartão [nome]" - registrar compra\n• "pagar fatura [nome]" - quitar cartão`;
+      
+      return {
+        success: true,
+        message: message
+      };
+      
+    } catch (error) {
+      console.error('❌ Erro ao listar cartões:', error);
+      return {
+        success: false,
+        message: `❌ Erro ao listar cartões: ${error instanceof Error ? error.message : 'Erro desconhecido'}`
+      };
+    }
+  }
+
+  /**
+   * 📋 Ver histórico de compras do cartão
+   */
+  private async viewCardHistory(data: any): Promise<{success: boolean, message?: string}> {
+    try {
+      console.log('📋 viewCardHistory chamada com dados:', data);
+      
+      const context = this.userContext!;
+      
+      // Encontrar cartão
+      let targetCard = null;
+      
+      if (data.card_id) {
+        targetCard = context.cards.find(c => c.id === data.card_id);
+      } else if (data.card_name) {
+        targetCard = context.cards.find(c => 
+          c.nickname.toLowerCase().includes(data.card_name.toLowerCase())
+        );
+      } else if (context.cards.length === 1) {
+        targetCard = context.cards[0];
+      }
+      
+      if (!targetCard) {
+        return {
+          success: false,
+          message: '❌ Cartão não encontrado. Especifique o nome do cartão.'
+        };
+      }
+      
+      // Buscar histórico de compras
+      const { data: purchases, error } = await supabase
+        .from('card_purchases_with_details')
+        .select('*')
+        .eq('card_id', targetCard.id)
+        .order('purchase_date', { ascending: false })
+        .limit(20);
+      
+      if (error) {
+        throw new Error(`Erro ao buscar histórico: ${error.message}`);
+      }
+      
+      if (!purchases || purchases.length === 0) {
+        return {
+          success: true,
+          message: `📋 Cartão "${targetCard.nickname}" ainda não possui compras registradas.`
+        };
+      }
+      
+      let message = `📋 **HISTÓRICO - CARTÃO ${targetCard.nickname.toUpperCase()}**\n\n`;
+      
+      const unpaidPurchases = purchases.filter(p => !p.is_paid);
+      const paidPurchases = purchases.filter(p => p.is_paid);
+      
+      if (unpaidPurchases.length > 0) {
+        message += `🔴 **FATURA ATUAL (${unpaidPurchases.length} compras)**\n`;
+        const currentTotal = unpaidPurchases.reduce((sum, p) => sum + p.amount, 0);
+        message += `💰 Total: R$ ${currentTotal.toFixed(2)}\n\n`;
+        
+        for (const purchase of unpaidPurchases.slice(0, 10)) {
+          const date = new Date(purchase.purchase_date).toLocaleDateString('pt-BR');
+          const installmentText = purchase.installments > 1 ? ` (${purchase.current_installment}/${purchase.installments}x)` : '';
+          message += `• ${purchase.description} - R$ ${purchase.amount.toFixed(2)}${installmentText}\n  📅 ${date}\n\n`;
+        }
+      }
+      
+      if (paidPurchases.length > 0) {
+        message += `✅ **COMPRAS PAGAS (últimas ${Math.min(paidPurchases.length, 5)})**\n`;
+        
+        for (const purchase of paidPurchases.slice(0, 5)) {
+          const date = new Date(purchase.purchase_date).toLocaleDateString('pt-BR');
+          message += `• ${purchase.description} - R$ ${purchase.amount.toFixed(2)} ✅\n  📅 ${date}\n\n`;
+        }
+      }
+      
+      return {
+        success: true,
+        message: message
+      };
+      
+    } catch (error) {
+      console.error('❌ Erro ao buscar histórico do cartão:', error);
+      return {
+        success: false,
+        message: `❌ Erro ao buscar histórico: ${error instanceof Error ? error.message : 'Erro desconhecido'}`
+      };
+    }
   }
 
   /**

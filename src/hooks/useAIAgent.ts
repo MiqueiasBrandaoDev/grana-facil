@@ -45,14 +45,17 @@ export const useAIAgent = () => {
         // Sincronizar dados baseado nos tipos de ações executadas
         const actionTypes = response.actions.map(a => a.type);
         
-        if (actionTypes.includes('create_transaction') || actionTypes.includes('pay_bill')) {
+        if (actionTypes.includes('create_transaction') || actionTypes.includes('pay_bill') || actionTypes.includes('pay_card_invoice')) {
           console.log('💰 Sincronizando por transação/pagamento...');
-          await syncAllData(); // pay_bill agora cria transação, precisa sync completo
+          await syncAllData(); // pay_bill e pay_card_invoice agora criam transação, precisa sync completo
         } else if (actionTypes.includes('create_category') || actionTypes.includes('create_goal')) {
           console.log('🏷️ Sincronizando por criação de categoria/meta...');
           await syncAllData();
         } else if (actionTypes.includes('create_bill') || actionTypes.includes('update_bill') || actionTypes.includes('delete_bill')) {
           console.log('📄 Sincronizando por ação em contas...');
+          await syncAllData();
+        } else if (actionTypes.includes('create_card') || actionTypes.includes('create_card_purchase')) {
+          console.log('💳 Sincronizando por ação em cartões...');
           await syncAllData();
         } else {
           console.log('🔄 Sincronização padrão...');

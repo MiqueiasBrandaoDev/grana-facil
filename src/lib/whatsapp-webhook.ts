@@ -107,7 +107,7 @@ export class WhatsAppWebhookService {
         await this.sendMessage(
           message.from,
           phoneNumberId,
-          "🤖 Olá! Sou a Grana IA. No momento, processamos apenas mensagens de texto. Tente enviar comandos como:\n\n• Gastei R$ 50 no mercado\n• Recebi R$ 2000 de salário\n• Qual meu saldo?\n• Quero economizar 5000 reais"
+          "🤖 Olá! Sou a Grana IA. No momento, processamos apenas mensagens de texto. Tente enviar comandos como:\n\n• Gastei R$ 50 no mercado\n• Recebi R$ 2000 de salário\n• Criar cartão Nubank dia 10\n• Quais cartões tenho?\n• Comprei 150 no cartão\n• Qual meu saldo?"
         );
         return;
       }
@@ -268,14 +268,18 @@ export class WhatsAppWebhookService {
 🏷️ Criar categorias automaticamente  
 🎯 Sugerir metas personalizadas
 📊 Analisar seus gastos
-💳 Gerenciar contas e investimentos
+💳 Gerenciar cartões de crédito e compras
+📄 Controlar contas a pagar/receber
 
 🚀 *Comandos de exemplo:*
 • "Gastei 50 reais no Carrefour"
 • "Recebi meu salário de 3000 reais"
+• "Criar cartão Nubank dia 10"
+• "Comprei 150 reais no cartão"
+• "Quais cartões tenho?"
+• "Pagar fatura do cartão"
 • "Quero economizar 10000 reais em 6 meses"
 • "Qual meu saldo atual?"
-• "Me dê conselhos financeiros"
 
 Digite qualquer comando para começar! 💪`;
 
