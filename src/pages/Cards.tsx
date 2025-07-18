@@ -12,9 +12,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { useCards, useCreateCard, useUpdateCard, useDeleteCard, useMarkInvoiceAsPaid, useCreatePurchase, useCardPurchases, type CreateCardData, type CreatePurchaseData } from '@/hooks/useCards';
+import { useCards, useCreateCard, useUpdateCard, useDeleteCard, useMarkInvoiceAsPaid, useCreatePurchase, useCardPurchases, type CreateCardData, type CreatePurchaseData, type CardWithPurchases } from '@/hooks/useCards';
 import { useCategories } from '@/hooks/useCategories';
 import CardPurchaseHistory from '@/components/cards/CardPurchaseHistory';
+import CardInvoicesTabs from '@/components/cards/CardInvoicesTabs';
 
 const cardSchema = z.object({
   nickname: z.string().min(1, 'Nome é obrigatório').max(100, 'Nome muito longo'),
@@ -42,9 +43,8 @@ const Cards: React.FC = () => {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isPurchaseDialogOpen, setIsPurchaseDialogOpen] = useState(false);
-  const [isPaymentConfirmOpen, setIsPaymentConfirmOpen] = useState(false);
   const [isHistoryDialogOpen, setIsHistoryDialogOpen] = useState(false);
-  const [selectedCard, setSelectedCard] = useState<any>(null);
+  const [selectedCard, setSelectedCard] = useState<CardWithPurchases | null>(null);
 
   const cardForm = useForm<CreateCardData>({
     resolver: zodResolver(cardSchema),
@@ -94,17 +94,6 @@ const Cards: React.FC = () => {
     }
   };
 
-  const openPaymentConfirm = (card: any) => {
-    setSelectedCard(card);
-    setIsPaymentConfirmOpen(true);
-  };
-
-  const handleConfirmPayment = async () => {
-    if (!selectedCard) return;
-    await markInvoiceAsPaid.mutateAsync(selectedCard.id);
-    setIsPaymentConfirmOpen(false);
-    setSelectedCard(null);
-  };
 
   const handleAddPurchase = async (data: CreatePurchaseData) => {
     if (!selectedCard) return;
@@ -114,7 +103,7 @@ const Cards: React.FC = () => {
     purchaseForm.reset();
   };
 
-  const openEditDialog = (card: any) => {
+  const openEditDialog = (card: CardWithPurchases) => {
     setSelectedCard(card);
     cardForm.reset({
       nickname: card.nickname || '',
@@ -124,7 +113,7 @@ const Cards: React.FC = () => {
     setIsEditDialogOpen(true);
   };
 
-  const openPurchaseDialog = (card: any) => {
+  const openPurchaseDialog = (card: CardWithPurchases) => {
     setSelectedCard(card);
     purchaseForm.reset({
       description: '',
@@ -137,7 +126,7 @@ const Cards: React.FC = () => {
     setIsPurchaseDialogOpen(true);
   };
 
-  const openHistoryDialog = (card: any) => {
+  const openHistoryDialog = (card: CardWithPurchases) => {
     setSelectedCard(card);
     setIsHistoryDialogOpen(true);
   };
@@ -206,58 +195,66 @@ const Cards: React.FC = () => {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="space-y-2">
+              {/* Status da Fatura */}
+              <div className="bg-muted/50 p-3 rounded-lg">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-sm font-medium">Fatura Atual</span>
+                  {card.pending_amount > 0 ? (
+                    <Badge variant="destructive" className="gap-1">
+                      <Clock className="w-3 h-3" />
+                      Pendente
+                    </Badge>
+                  ) : (
+                    <Badge variant="secondary" className="gap-1">
+                      <CheckCircle className="w-3 h-3" />
+                      Em dia
+                    </Badge>
+                  )}
+                </div>
+                <div className="text-2xl font-bold text-center py-2">
+                  {formatCurrency(card.pending_amount)}
+                </div>
+                {card.pending_purchases > 0 && (
+                  <div className="text-xs text-center text-muted-foreground">
+                    {card.pending_purchases} compra{card.pending_purchases > 1 ? 's' : ''} pendente{card.pending_purchases > 1 ? 's' : ''}
+                  </div>
+                )}
+              </div>
+
+              {/* Informações do Cartão */}
+              <div className="space-y-1">
                 <div className="flex justify-between text-sm">
-                  <span>Fatura Atual:</span>
-                  <span className="font-medium">{formatCurrency(card.pending_amount)}</span>
+                  <span className="text-muted-foreground">Vencimento:</span>
+                  <span>Todo dia {card.due_day}</span>
                 </div>
                 {card.limit_amount && (
-                  <div className="flex justify-between text-sm text-muted-foreground">
-                    <span>Limite:</span>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Limite:</span>
                     <span>{formatCurrency(card.limit_amount)}</span>
                   </div>
                 )}
-                <div className="flex justify-between text-sm text-muted-foreground">
-                  <span>Compras Pendentes:</span>
-                  <span>{card.pending_purchases}</span>
-                </div>
               </div>
 
-              <div className="flex items-center gap-2">
-                {card.current_invoice_paid ? (
-                  <Badge variant="secondary" className="gap-1">
-                    <CheckCircle className="w-3 h-3" />
-                    Fatura Paga
-                  </Badge>
-                ) : (
-                  <Badge variant="destructive" className="gap-1">
-                    <Clock className="w-3 h-3" />
-                    Fatura Pendente
-                  </Badge>
-                )}
-              </div>
-
-              <div className="grid grid-cols-2 gap-2 pt-2">
+              {/* Ações */}
+              <div className="space-y-2 pt-2">
                 <Button
                   variant="outline"
-                  size="sm"
+                  className="w-full gap-2"
                   onClick={() => openPurchaseDialog(card)}
-                  className="gap-1"
                 >
-                  <Plus className="w-3 h-3" />
-                  Compra
+                  <Plus className="w-4 h-4" />
+                  Registrar Compra
                 </Button>
-                {!card.current_invoice_paid && card.pending_amount > 0 && (
-                  <Button
-                    variant="default"
-                    size="sm"
-                    onClick={() => openPaymentConfirm(card)}
-                    className="gap-1"
-                  >
-                    <DollarSign className="w-3 h-3" />
-                    Pagar Fatura
-                  </Button>
-                )}
+                
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => openHistoryDialog(card)}
+                  className="w-full gap-1"
+                >
+                  <Info className="w-3 h-3" />
+                  Ver Faturas
+                </Button>
               </div>
             </CardContent>
           </Card>
@@ -547,68 +544,21 @@ const Cards: React.FC = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Modal de confirmação de pagamento */}
-      <AlertDialog open={isPaymentConfirmOpen} onOpenChange={setIsPaymentConfirmOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Confirmar Pagamento da Fatura</AlertDialogTitle>
-            <AlertDialogDescription>
-              Você está prestes a marcar a fatura do cartão <strong>{selectedCard?.nickname}</strong> como paga.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          
-          <div className="space-y-4">
-            <div className="bg-muted p-4 rounded-lg space-y-2">
-              <div className="flex justify-between">
-                <span>Valor da fatura:</span>
-                <span className="font-semibold text-destructive">
-                  {selectedCard ? formatCurrency(selectedCard.pending_amount) : ''}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span>Compras pendentes:</span>
-                <span className="font-medium">
-                  {selectedCard?.pending_purchases || 0} compras
-                </span>
-              </div>
-            </div>
-            
-            <p className="text-sm text-muted-foreground">
-              Isso criará automaticamente uma transação de despesa no valor total da fatura e marcará todas as compras como pagas.
-            </p>
-            
-            <p className="text-sm font-medium text-destructive">
-              Esta ação não pode ser desfeita.
-            </p>
-          </div>
-          
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction 
-              onClick={handleConfirmPayment}
-              disabled={markInvoiceAsPaid.isPending}
-              className="bg-destructive hover:bg-destructive/90"
-            >
-              {markInvoiceAsPaid.isPending ? 'Processando...' : 'Confirmar Pagamento'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
 
-      {/* Modal de histórico de compras */}
+      {/* Modal de histórico com faturas por abas */}
       <Dialog open={isHistoryDialogOpen} onOpenChange={setIsHistoryDialogOpen}>
-        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+        <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Info className="w-5 h-5" />
-              Histórico de Compras - {selectedCard?.nickname}
+              Faturas e Histórico - {selectedCard?.nickname}
             </DialogTitle>
             <DialogDescription>
-              Todas as compras realizadas neste cartão
+              Visualize suas faturas mês a mês e gerencie pagamentos
             </DialogDescription>
           </DialogHeader>
           
-          <CardPurchaseHistory cardId={selectedCard?.id} />
+          {selectedCard && <CardInvoicesTabs card={selectedCard} />}
           
           <div className="flex justify-end pt-4">
             <Button 

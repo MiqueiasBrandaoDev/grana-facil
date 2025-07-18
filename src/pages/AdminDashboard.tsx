@@ -309,7 +309,7 @@ const AdminDashboard: React.FC = () => {
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Painel Administrativoooo</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Painel Administrativo</h1>
           <p className="text-muted-foreground">
             Bem-vindo, {adminUser.name} ({adminUser.role === 'super_admin' ? 'Super Admin' : 'Admin'})
           </p>
